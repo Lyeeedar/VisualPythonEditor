@@ -17,46 +17,79 @@ class Program:
 class Method:
     def __init__(self, name):
         self.name = name
-        self.input = InOutNode("Input")
+        self.inputs = []
         self.nodes = []
-        self.output = InOutNode("Output")
+        self.outputs = []
+        self.setNumInputs(1)
+        self.setNumOutputs(1)
         
     def setNumInputs(self, num, baseName="Input"):
-        self.input.setNumLinks(num, baseName)
+        prev = self.inputs
+        self.inputs = [""] * num
+        for i in range(num):
+            if i < len(prev) :
+                self.inputs[i] = prev[i]
+            else :
+                self.inputs[i] = baseName+str(i)
             
     def setNumOutputs(self, num, baseName="Output"):
-        self.output.setNumLinks(num, baseName)
+        prev = self.outputs
+        self.outputs = [""] * num
+        for i in range(num):
+            if i < len(prev) :
+                self.outputs[i] = prev[i]
+            else :
+                self.outputs[i] = baseName+str(i)
         
     def addNode(self, node):
         self.nodes.append(node)
             
     def compile(self):
-        
-        self.input.reset()
-        self.input.priority = len(self.nodes)+10
-        self.output.reset()
         for node in self.nodes:
             node.reset()
         
         processList = Queue.Queue() 
-        lines = []
+        data = {}
+        data["Queue"] = processList
+        data["Return"] = {}
+        data["Code"] = []
         
-        lines.append((0, self.output.processAsOutput(processList)))
+        for node in self.nodes:
+            if isinstance(node, TerminalNode):
+                processList.put_nowait(node)
         
         while not processList.empty() :
             node = processList.get_nowait()
-            lines.append((node.priority, node.process(processList)))
+            node.process(data)
         
-        lines.sort(key=lambda tup: tup[0], reverse = True)
+        data["Code"].sort(key=lambda tup: tup[0], reverse = True)
         
-        method = "def "+self.name
+        method = "def "+self.name+"("
+        first = True
+        for input in self.inputs:
+            if first:
+                first = False
+            else:
+                method += ", "
+            method += input
+        method+="):"
         
-        for line in lines :
-            method += line[1]+"\n\t"
+        for line in data["Code"] :
+            method += "\n\t"+line[1]
+            
+        method += "\n\treturn ("
+        first = True
+        for key in data["Return"].keys():
+            if first:
+                first = False
+            else:
+                method += ", "
+            method += data["Return"][key]
+        method += ")"
             
         print method
-        
-class InOutNode:
+    
+class Node:
     def __init__(self, name):
         self.reset()
         
@@ -83,61 +116,57 @@ class InOutNode:
                 self.links[keys[i]] = prevLinks[keys[i]]
             else :
                 self.links[baseName+str(i)] = ()
-             
-    def process(self, queue):
-        return self.processAsInput()
-                
-    def processAsInput(self):
-        # Build argument string
-        string = "("
-        first = True
-        for key in self.links.keys() :
-            if not first :
-                string += ", "
-            else :
-                first = False
-            string += key
-        string += "):"
-        
-        return string
+
+class StartNode(Node):
+    pass
+class TerminalNode(Node):
+    pass
+            
+class ArgumentNode(StartNode):
+    def __init__(self):
+        Node.__init__(self, "Method Input")
     
-    def processAsOutput(self, queue):
+    def set(self, args):
+        self.links = {}
+        for arg in args:
+            self.links[arg] = ()
+    
+    def process(self, data):    
+        pass
+    
+class OutputNode(TerminalNode):
+    def __init__(self):
+        Node.__init__(self, "Method Output")
+    
+    def set(self, outs):
+        self.links = {}
+        for out in outs:
+            self.links[out] = ()
+    
+    def process(self, data):
         # Build argument string and queue
-        string = "return ("
-        first = True
+
         for key in self.links.keys() :
+            
+            if len(self.links[key]) == 0 :
+                continue
+            
             (node, nodename) = self.links[key]
-            if not first :
-                string += ", "
-            else :
-                first = False
-            string += nodename
             
             # Queue if needed
-            if not node.added :
-                queue.put_nowait(node)
+            if not node.added:
+                data["Queue"].put_nowait(node)
                 node.added = True
             if self.priority+1 > node.priority :
                 node.priority = self.priority+1
-            
-        string += ")"
-        
-        return string
-        
-        
-class MethodNode:
+                
+            data["Return"][key] = nodename
+               
+class MethodNode(Node):
     def __init__(self, method):
-        self.reset()
-        
+        Node.__init__(self, method.name)
         self.method = method
-        self.links = {}
-        self.outputs = {}
-        
         self.update()
-
-    def reset(self):
-        self.added = False
-        self.priority = 0
         
     def update(self):
         self.links = {}
@@ -148,33 +177,7 @@ class MethodNode:
         for key in self.method.output.links.keys() :
             self.outputs.append(key)
         
-    def setNumInputs(self, num, baseName) :
-        prevLinks = self.links
-        keys = prevLinks.keys()
-        self.links = {}
-        for i in range(num):
-            if i < len(keys) :
-                self.links[keys[i]] = prevLinks[keys[i]]
-            else :
-                self.links[baseName+i] = ()
-                
-    def setNumOutputs(self, num, baseName) :
-        prevLinks = self.outputs
-        keys = prevLinks.keys()
-        self.outputs = {}
-        for i in range(num):
-            if i < len(keys) :
-                self.outputs[keys[i]] = prevLinks[keys[i]]
-            else :
-                self.outputs[baseName+i] = None
-                
-    def removeLink(self, name):
-        self.links[name] = ()
-
-    def addLink(self, name, node, nodename):
-        self.links[name] = (node, nodename)
-        
-    def process(self, queue):
+    def process(self, data):
         # Build argument string and queue
         string = "("
         first = True
@@ -198,22 +201,31 @@ class MethodNode:
             
             # Queue if needed
             if not node.added :
-                queue.put_nowait(node)
+                data["Queue"].put_nowait(node)
                 node.added = True
             if self.priority+1 > node.priority :
                 node.priority = self.priority+1
         
         string += ")"
         
-        return string
+        data["Code"].append((self.priority, string))
 
 def createPassThroughMethod(name, num):
     method = Method(name)
     method.setNumInputs(num)
     method.setNumOutputs(num)
     
+    argNode = ArgumentNode()
+    argNode.set(method.inputs)
+    
+    outNode = OutputNode()
+    outNode.set(method.outputs)
+    
     for i in range(num) :
-        method.output.addLink(method.output.links.keys()[i], method.input, method.input.links.keys()[i])
+        outNode.addLink(outNode.links.keys()[i], argNode, argNode.links.keys()[i])
+        
+    method.addNode(argNode)
+    method.addNode(outNode)
         
     return method
 
@@ -240,7 +252,7 @@ def createNStepMethod(name, num, n):
     
     return method
 
-method = createNStepMethod("TestMethod", 2, 2)
+method = createPassThroughMethod("TestMethod", 2)
 method.compile()
 
 
