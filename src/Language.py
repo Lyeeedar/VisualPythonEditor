@@ -170,11 +170,11 @@ class MethodNode(Node):
         
     def update(self):
         self.links = {}
-        for key in self.method.input.links.keys() :
+        for key in self.method.inputs :
             self.links[key] = {}
             
         self.outputs = []
-        for key in self.method.output.links.keys() :
+        for key in self.method.outputs :
             self.outputs.append(key)
         
     def process(self, data):
