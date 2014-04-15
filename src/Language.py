@@ -7,12 +7,32 @@ Created on 29 Jan 2014
 import Queue
 
 class Program:
-    def __init__(self):
+    def __init__(self, name):
         self.methods = []
+        self.name = name
         
     def addMethod(self, method):
         if not method in self.methods:
             self.methods.append(method)
+
+    def checkNameUsed(self, name):
+        for method in self.methods:
+            if name == method.name:
+                return True
+        return False            
+    def getUnusedName(self):
+        name = "Empty Method"
+        while self.checkNameUsed(name):
+            name = name + "0"
+        return name
+    
+    def compile(self, mainMethod):
+        code = "class " + self.name + ":\n"
+        for method in self.methods:
+            code += method.compile() + "\n\n"
+        code += "program = " + self.name+"()\n"
+        code += "program." + mainMethod.name + "()"
+        return code
 
 class Method:
     def __init__(self, name):
@@ -61,10 +81,21 @@ class Method:
         while not processList.empty() :
             node = processList.get_nowait()
             node.process(data)
+            for key in node.links.keys():
+                tuple = node.links[key]
+                if len(tuple) == 0:
+                    continue
+                linked = tuple[0]
+                # Queue if needed
+                if not linked.added :
+                    data["Queue"].put_nowait(linked)
+                    linked.added = True
+                if node.priority+1 > linked.priority :
+                    linked.priority = node.priority+1
         
         data["Code"].sort(key=lambda tup: tup[0], reverse = True)
         
-        method = "def "+self.name+"("
+        method = "\tdef "+self.name+"("
         first = True
         for input in self.inputs:
             if first:
@@ -75,9 +106,9 @@ class Method:
         method+="):"
         
         for line in data["Code"] :
-            method += "\n\t"+line[1]
+            method += "\n\t\t"+line[1]
             
-        method += "\n\treturn ("
+        method += "\n\t\treturn ("
         first = True
         for key in data["Return"].keys():
             if first:
@@ -87,7 +118,7 @@ class Method:
             method += data["Return"][key]
         method += ")"
             
-        print method
+        return method
     
 class Node:
     def __init__(self, name):
@@ -116,6 +147,9 @@ class Node:
                 self.links[keys[i]] = prevLinks[keys[i]]
             else :
                 self.links[baseName+str(i)] = ()
+                
+    def update(self):
+        pass
 
 class StartNode(Node):
     pass
@@ -133,6 +167,21 @@ class ArgumentNode(StartNode):
     
     def process(self, data):    
         pass
+    
+class ValueNode(StartNode):
+    def __init__(self, name, value):
+        Node.__init__(self, value)
+        self.links = {}
+        self.links[name] = ()
+    
+    def set(self, name, value):
+        self.name = value
+        self.links = {}
+        self.links[name] = ()
+    
+    def process(self, data):    
+        code = self.links.keys()[0] + " = " + self.name
+        data["Code"].append((self.priority, code))
     
 class OutputNode(TerminalNode):
     def __init__(self):
@@ -161,21 +210,63 @@ class OutputNode(TerminalNode):
                 node.priority = self.priority+1
                 
             data["Return"][key] = nodename
-               
+
+class PrintNode(TerminalNode):
+    def __init__(self):
+        Node.__init__(self, "Print")
+        self.links = {}
+        self.links["Print"] = ()
+        
+    def process(self, data):
+        code = "print " + self.links["Print"][1]
+        data["Code"].append((self.priority, code))
+        
+class FileWriteNode(TerminalNode):
+    def __init__(self):
+        Node.__init__(self, "File Write")
+        
+        self.links = {}
+        self.links["Filename"] = ()
+        self.links["Contents"] = ()
+        
+    def process(self, data):
+        code = "file = open(" + self.links["Filename"][1] + ", 'w')\n\t\t"
+        code += "file.write(" + self.links["Contents"][1] + ")\n\t\t"
+        code += "file.close()"
+        data["Code"].append((self.priority, code))
+
+class FileReadNode(Node):
+    def __init__(self):
+        Node.__init__(self, "File Read")
+        self.outputs = []
+        
+        self.links = {}
+        self.links["Filename"] = ()
+        self.outputs.append("Contents")
+    
+    def process(self, data):
+        code = "file = open(" + self.links["Filename"][1] + ", 'r')\n\t\t"
+        code += "Contents = file.read()\n\t\t"
+        code += "file.close()"
+        data["Code"].append((self.priority, code))
+           
 class MethodNode(Node):
     def __init__(self, method):
         Node.__init__(self, method.name)
         self.method = method
+        self.outputs = []
         self.update()
         
     def update(self):
-        self.links = {}
+        self.name = self.method.name
         for key in self.method.inputs :
-            self.links[key] = {}
+            print key
+            if not key in self.links:
+                self.links[key] = {}
             
-        self.outputs = []
-        for key in self.method.outputs :
-            self.outputs.append(key)
+        for key in self.method.outputs:
+            if not key in self.outputs:
+                self.outputs.append(key)
         
     def process(self, data):
         # Build argument string and queue
@@ -198,13 +289,6 @@ class MethodNode(Node):
             else :
                 first = False
             string += nodename
-            
-            # Queue if needed
-            if not node.added :
-                data["Queue"].put_nowait(node)
-                node.added = True
-            if self.priority+1 > node.priority :
-                node.priority = self.priority+1
         
         string += ")"
         
@@ -229,31 +313,71 @@ def createPassThroughMethod(name, num):
         
     return method
 
-def createNStepMethod(name, num, n):
+def createTestInputsMethod(name):
     method = Method(name)
-    method.setNumInputs(num)
-    method.setNumOutputs(num)
+    method.setNumInputs(1)
+    method.setNumOutputs(3)
     
-    current = None
-    for i in range(n) :
-        nc = MethodNode(createPassThroughMethod(name+str(i), num))
-        if current == None :
-            for i in range(num) :
-                nc.addLink(nc.links.keys()[i], method.input, method.input.links.keys()[i])
-        else :
-            for i in range(num) :
-                nc.addLink(nc.links.keys()[i], current, current.outputs[i])
-                
-        current = nc
-        method.addNode(nc)
-                
-    for i in range(num) :
-        method.output.addLink(method.output.links.keys()[i], current, current.outputs[i])
+    argNode = ArgumentNode()
+    argNode.set(method.inputs)
     
+    outNode = OutputNode()
+    outNode.set(method.outputs)
+    
+    outNode.addLink(outNode.links.keys()[0], argNode, argNode.links.keys()[0])
+        
+    method.addNode(argNode)
+    method.addNode(outNode)
+    
+    valNode = ValueNode("IntOut", "2")
+    outNode.addLink(outNode.links.keys()[1], valNode, valNode.links.keys()[0])
+    method.addNode(valNode)
+    
+    filenameNode = ValueNode("filename", "'test.txt'")
+    fileNode = FileReadNode()
+    fileNode.addLink(fileNode.links.keys()[0], filenameNode, filenameNode.links.keys()[0])
+    outNode.addLink(outNode.links.keys()[2], fileNode, fileNode.outputs[0])
+    method.addNode(fileNode)
+    method.addNode(filenameNode)
+        
     return method
 
-method = createPassThroughMethod("TestMethod", 2)
-method.compile()
+def createTestOutputsMethod(name):
+    method = Method(name)
+    method.setNumInputs(3)
+    method.setNumOutputs(1)
+    
+    argNode = ArgumentNode()
+    argNode.set(method.inputs)
+    
+    outNode = OutputNode()
+    outNode.set(method.outputs)
+    
+    outNode.addLink(outNode.links.keys()[0], argNode, argNode.links.keys()[0])
+        
+    method.addNode(argNode)
+    method.addNode(outNode)
+    
+    filenameNode = ValueNode("filename", "'test.txt'")
+    fileNode = FileWriteNode()
+    fileNode.addLink("Filename", filenameNode, filenameNode.links.keys()[0])
+    fileNode.addLink("Contents", argNode, argNode.links.keys()[1])
+    method.addNode(fileNode)
+    method.addNode(filenameNode)
+    
+    printNode = PrintNode()
+    printNode.addLink(printNode.links.keys()[0], argNode, argNode.links.keys()[2])
+    method.addNode(printNode)
+        
+    return method
+
+if __name__ == "__main__":
+    program = Program("TestProgram")
+    program.addMethod(createPassThroughMethod("TestMethod1", 2))
+    program.addMethod(createTestInputsMethod("TestMethod2"))
+    program.addMethod(createTestOutputsMethod("TestMethod3"))
+    print program.compile(program.methods[0])
+    
 
 
 
