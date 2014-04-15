@@ -2,6 +2,7 @@
 from Tkinter import *
 from Language import *
 import ttk
+import subprocess
 
 class GUIInput:
     def __init__(self, parent, name):
@@ -74,6 +75,7 @@ class GUINode:
         self.inputNodes = {}
         self.outputNodes = {}
         self.frame = None
+        self.canEdit = True
         self.x = 0
         self.y = 0
         
@@ -101,6 +103,17 @@ class GUINode:
         self.updateLinks()
         
         self.frame.place(x=self.x, y=self.y)
+        
+        self.createMenu()
+        
+    def createMenu(self):
+        self.title.bind("<Button-3>", self.mouseRight)
+        
+        # create a popup menu
+        self.aMenu = Menu(self.frame, tearoff=0)
+        if self.canEdit:
+            self.aMenu.add_command(label="Edit", command=self.edit)
+        self.aMenu.add_command(label="Delete", command=self.delete)
                   
     def setPos(self, x, y):
         self.x = x
@@ -142,6 +155,13 @@ class GUINode:
                 guionode = self.parent.nodeMap[onode]
                 onodekey = link[1]
                 self.parent.addLink(guionode, onodekey, self, key)
+                
+    def edit(self):
+        pass
+
+    def delete(self):
+        self.frame.destroy()
+        self.parent.removeNode(self)
 
 class GUIArgumentEditFrame(Toplevel):
     def __init__(self, parent, method, node):
@@ -208,14 +228,7 @@ class GUIArgumentNode(GUINode):
             self.outputNodes[key] = link
             link.label.grid(row=i, column=1, sticky=N+S+E+W, pady=2)
             i += 1        
-    
-    def createMenu(self):
-        self.title.bind("<Button-3>", self.mouseRight)
-        
-        # create a popup menu
-        self.aMenu = Menu(self.frame, tearoff=0)
-        self.aMenu.add_command(label="Edit", command=self.edit)
-    
+      
     def mouseRight(self, event):
         self.aMenu.post(event.x_root, event.y_root)
     
@@ -293,14 +306,7 @@ class GUIOutputNode(GUINode):
             link.label.grid(row=i, column=0, sticky=N+S+E+W, pady=2)
             Label(self.linkframe, text="     ").grid(row=i, column=1, sticky=N+S+E+W)
             i += 1
-    
-    def createMenu(self):
-        self.title.bind("<Button-3>", self.mouseRight)
-        
-        # create a popup menu
-        self.aMenu = Menu(self.frame, tearoff=0)
-        self.aMenu.add_command(label="Edit", command=self.edit)
-    
+     
     def mouseRight(self, event):
         self.aMenu.post(event.x_root, event.y_root)
     
@@ -369,15 +375,8 @@ class GUIMethodNode(GUINode):
         self.guiparent = guiparent
         GUINode.create(self, guiparent)
         
-        self.title.bind("<Button-3>", self.mouseRight)
-        
-        # create a popup menu
-        self.aMenu = Menu(self.frame, tearoff=0)
-        self.aMenu.add_command(label="Edit", command=self.edit)
-        
         i = 1
         for key in self.node.links.keys():
-            print key
             link = GUIInput(self, key)
             link.create(self.linkframe)
             self.inputNodes[key] = link
@@ -411,24 +410,28 @@ class GUIMethodNode(GUINode):
                 self.node.outputs.remove(key)
 
 class GUIFileReadNode(GUIMethodNode):
-    def createMenu(self):
-        pass
+    
+    def __init__(self, parent, node):
+        GUIMethodNode.__init__(self, parent, node)
+        self.canEdit = False
     def edit(self):
         pass
     def verify(self):
         pass
     
 class GUIFileWriteNode(GUIOutputNode):
-    def createMenu(self):
-        pass
+    def __init__(self, parent, node):
+        GUIOutputNode.__init__(self, parent, node)
+        self.canEdit = False
     def edit(self):
         pass
     def verify(self):
         pass
 
 class GUIPrintNode(GUIOutputNode):
-    def createMenu(self):
-        pass
+    def __init__(self, parent, node):
+        GUIOutputNode.__init__(self, parent, node)
+        self.canEdit = False
     def edit(self):
         pass
     def verify(self):
@@ -605,7 +608,19 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
-                    
+    
+    def removeNode(self, node):
+        
+        for key in node.inputNodes.keys():
+            self.deleteLinks(node, key)
+            
+        for key in node.outputNodes.keys():
+            self.deleteLinks(node, key)
+        
+        self.nodes.remove(node)
+        del self.nodeMap[node.node]
+        self.method.removeNode(node.node)
+          
     def updateLinks(self):
         self.canvas.delete("Link")
         for link in self.links:
@@ -620,7 +635,6 @@ class GUIMethod:
             return True
         return False
     def deleteLinks(self, node, key):
-        print "Deleting " + str(node) + "   key: " + str(key)
         links = []
         for link in self.links:
             if self.comparison(node, key, link):
@@ -748,20 +762,30 @@ class MethodEditWindow(Toplevel):
     
     def removeInput(self, input):
         self.read()
-        print "delete "+input
-        for i in self.inputs:
-            print i
         self.inputs.remove(input)
         self.create()
         
     def removeOutput(self, output):
         self.read()
-        print "delete "+output
-        for i in self.outputs:
-            print i
         self.outputs.remove(output)
         self.create()
-        
+    
+    def gen_valid_identifier(self, seq):
+        # get an iterator
+        itr = iter(seq)
+        # pull characters until we get a legal one for first in identifer
+        for ch in itr:
+            if ch == '_' or ch.isalpha():
+                yield ch
+                break
+        # pull remaining characters and yield legal ones for identifier
+        for ch in itr:
+            if ch == '_' or ch.isalpha() or ch.isdigit():
+                yield ch
+    
+    def sanitize_identifier(self, name):
+        return ''.join(self.gen_valid_identifier(name))
+
     def read(self):
         self.inputs = []
         for mi in self.methodinputs:
@@ -770,6 +794,7 @@ class MethodEditWindow(Toplevel):
         for mo in self.methodoutputs:
             self.outputs.append(mo.get())
         self.name = self.methodname.get()
+        self.name = self.sanitize_identifier(self.name)
             
     def apply(self):
         self.read()
@@ -836,7 +861,6 @@ class TabbedPane(Frame):
                 tab[0] = newname
                 tab[2].config(text=newname, command=lambda newname=newname: self.setActiveTab(newname))
                 return
-        print "Failed to find "+name+" to change to "+newname
         
     def getActive(self):
         return self.active
@@ -883,7 +907,9 @@ class MainWindow(Frame):
         file.close()
         
     def run(self):
-        pass
+        method = self.tabbedpane.getActive().method
+        program = self.openMethods[method][1]
+        print subprocess.check_output(["python", program.name+".py"])
         
     def addProgramBrowser(self):
         pass

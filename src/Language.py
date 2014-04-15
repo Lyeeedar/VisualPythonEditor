@@ -13,7 +13,7 @@ class Program:
         
     def addMethod(self, method):
         if not method in self.methods:
-            self.methods.append(method)
+            self.methods.append(method)        
 
     def checkNameUsed(self, name):
         for method in self.methods:
@@ -21,7 +21,7 @@ class Program:
                 return True
         return False            
     def getUnusedName(self):
-        name = "Empty Method"
+        name = "Empty_Method"
         while self.checkNameUsed(name):
             name = name + "0"
         return name
@@ -30,7 +30,7 @@ class Program:
         code = "class " + self.name + ":\n"
         for method in self.methods:
             code += method.compile() + "\n\n"
-        code += "program = " + self.name+"()\n"
+        code += "program = " + self.name + "()\n"
         code += "program." + mainMethod.name + "()"
         return code
 
@@ -63,7 +63,10 @@ class Method:
         
     def addNode(self, node):
         self.nodes.append(node)
-            
+    
+    def removeNode(self, node):
+        self.nodes.remove(node)
+    
     def compile(self):
         for node in self.nodes:
             node.reset()
@@ -95,28 +98,25 @@ class Method:
         
         data["Code"].sort(key=lambda tup: tup[0], reverse = True)
         
-        method = "\tdef "+self.name+"("
-        first = True
+        method = "\tdef "+self.name+"(self"
         for input in self.inputs:
-            if first:
-                first = False
-            else:
-                method += ", "
+            method += ", "
             method += input
         method+="):"
         
         for line in data["Code"] :
             method += "\n\t\t"+line[1]
-            
-        method += "\n\t\treturn ("
-        first = True
-        for key in data["Return"].keys():
-            if first:
-                first = False
-            else:
-                method += ", "
-            method += data["Return"][key]
-        method += ")"
+        
+        if len(data["Return"]) > 0:
+            method += "\n\t\treturn ("
+            first = True
+            for key in data["Return"].keys():
+                if first:
+                    first = False
+                else:
+                    method += ", "
+                method += data["Return"][key]
+            method += ")"
             
         return method
     
@@ -260,7 +260,6 @@ class MethodNode(Node):
     def update(self):
         self.name = self.method.name
         for key in self.method.inputs :
-            print key
             if not key in self.links:
                 self.links[key] = {}
             
