@@ -122,6 +122,11 @@ class GUINode:
         
         self.parent.updateLinks()
         
+    def move(self, dx, dy):
+        self.x += dx
+        self.y += dy
+        self.setPos(self.x, self.y)
+        
     def mouseDown(self, event):
         self.lx = event.x_root
         self.ly = event.y_root
@@ -408,7 +413,71 @@ class GUIMethodNode(GUINode):
             if not key in self.node.method.outputs:
                 self.parent.deleteLinks(self, key)
                 self.node.outputs.remove(key)
+                
+class GUIArithmeticEditFrame(Toplevel):
+    def __init__(self, parent, method, node):
+        Toplevel.__init__(self, parent, background="white")
+        self.geometry("360x240+300+300") 
+         
+        self.parent = parent
+        self.method = method
+        self.node = node
+        
+        self.frame = Frame(self)
+        self.create()
+        self.frame.pack(fill=BOTH, expand=1)
+        
+    def create(self):
+        Grid.columnconfigure(self.frame, 0, weight=1)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        
+        Label(self.frame, text="Operation").grid(row=0, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        MODES = ["Add", "Subtract", "Multiply", "Divide"]
+        
+        self.v = StringVar()
+        self.v.set(MODES[0])
+        
+        i = 1
+        for mode in MODES:
+            b = Radiobutton(self.frame, text=mode,
+                            variable=self.v, value=mode)
+            b.grid(row=i, column=0, columnspan=2, sticky=W)
+            i+=1
+        
+        Label(self.frame, text="Num Inputs").grid(row=i, column=0, sticky=N+S+E+W)
+                
+        OPTIONS = []
+        for n in range(18):
+            OPTIONS.append(n+2)
+                
+        self.variable = IntVar(self.frame)
+        self.variable.set(len(self.node.node.links)) # default value
+        
+        w = apply(OptionMenu, (self.frame, self.variable) + tuple(OPTIONS))
+        w.grid(row=i, column=1, sticky=N+S+E+W)
+        
+        i+=1
+        
+        Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
+        Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
+        
+    def apply(self):
+        self.node.node.setOperator(self.v.get())
+        self.node.node.setNumInputs(self.variable.get())
+        
+        self.node.create()
+        self.destroy()
+                    
+    def cancel(self):
+        self.destroy()
 
+class GUIArithmeticNode(GUIMethodNode):
+    def edit(self):
+        GUIArithmeticEditFrame(self.frame, self.parent.method, self)
+    def verify(self):
+        pass
+                
 class GUIFileReadNode(GUIMethodNode):
     
     def __init__(self, parent, node):
@@ -477,11 +546,14 @@ class GUIMethod:
         self.frame.pack(fill=BOTH, expand=1)
         
         self.canvas.bind("<Button-3>", self.mouseRight)
+        self.canvas.bind("<Button-1>", self.mouseDown)
+        self.canvas.bind("<B1-Motion>", self.mouseDrag)
         
         # create a popup menu
         self.aMenu = Menu(self.frame, tearoff=0)
         self.aMenu.add_command(label="New Method Node", command=self.addMethodNode)
         self.aMenu.add_command(label="New File Read Node", command=self.addFileReadNode)
+        self.aMenu.add_command(label="New Arithmetic Node", command=self.addArithmeticNode)
         self.aMenu.add_command(label="New Input Node", command=self.addInputNode)
         self.aMenu.add_command(label="New Value Node", command=self.addValueNode)
         self.aMenu.add_command(label="New Output Node", command=self.addOutputNode)
@@ -533,9 +605,25 @@ class GUIMethod:
     def cancelLinking(self):
         self.linking = False
         self.link = [None, None]
+    
+    def mouseDown(self, event):
+        self.lx = event.x_root
+        self.ly = event.y_root
         
+    def mouseDrag(self, event):
+        dx = event.x_root - self.lx
+        dy = event.y_root - self.ly
+        
+        self.lx = event.x_root
+        self.ly = event.y_root
+        
+        for node in self.nodes:
+            node.move(dx, dy)
+    
     def mouseRight(self, event):
         self.aMenu.post(event.x_root, event.y_root)
+        self.clickx = event.x
+        self.clicky = event.y
 
     def addMethodNode(self):
         node = MethodNode(createEmptyMethod(self.program))
@@ -546,6 +634,7 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
         
     def addFileReadNode(self):
         node = FileReadNode()
@@ -556,6 +645,18 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
+        
+    def addArithmeticNode(self):
+        node = ArithmeticNode()
+        self.method.addNode(node)
+        
+        snode = GUIArithmeticNode(self, node)
+        self.nodes.append(snode)
+        self.nodeMap[node] = snode
+        
+        self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
                         
     def addInputNode(self):
         node = ArgumentNode()
@@ -567,6 +668,7 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
                         
     def addOutputNode(self):
         node = OutputNode()
@@ -578,6 +680,7 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
         
     def addPrintNode(self):
         node = PrintNode()
@@ -588,6 +691,7 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
         
     def addFileWriteNode(self):
         node = FileWriteNode()
@@ -598,6 +702,7 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
     
     def addValueNode(self):
         node = ValueNode("Value", "'A String'")
@@ -608,6 +713,7 @@ class GUIMethod:
         self.nodeMap[node] = snode
         
         self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
     
     def removeNode(self, node):
         

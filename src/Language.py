@@ -249,7 +249,51 @@ class FileReadNode(Node):
         code += "Contents = file.read()\n\t\t"
         code += "file.close()"
         data["Code"].append((self.priority, code))
-           
+
+class ArithmeticNode(Node):
+    def __init__(self):
+        Node.__init__(self, "Add")
+        self.outputs = []
+        
+        self.setNumInputs(2)
+        self.outputs.append("Result")
+        
+    def setOperator(self, operation):
+        self.name = operation
+        
+    def setNumInputs(self, num):
+        prevlinks = self.links
+        self.links = {}
+        for i in range(num):
+            key = "Input"+str(i)
+            self.links[key] = ()
+            if key in prevlinks:
+                self.links[key] = prevlinks[key]
+    
+    def process(self, data):
+        code = "Result = "
+        num = len(self.links)
+        
+        operator = "+"
+        if self.name == "Subtract":
+            operator = "-"
+        elif self.name == "Multiply":
+            operator = "*"
+        elif self.name == "Divide":
+            operator = "/"
+            
+        for i in range(num-2):
+            code += "("
+        for i in range(num):
+            link = self.links["Input"+str(i)]
+            if i > 0:
+                code += " " + operator + " "
+            code += link[1]
+            if num > 1 and i > 0 and i < num-1:
+                code += ")"
+        
+        data["Code"].append((self.priority, code))
+ 
 class MethodNode(Node):
     def __init__(self, method):
         Node.__init__(self, method.name)
