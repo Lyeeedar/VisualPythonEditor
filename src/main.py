@@ -67,7 +67,8 @@ class GUIOutput:
         
     def mouseDown(self, event):
         self.parent.parent.startOutputLink(self.parent, self.name)
-        
+
+dragFocus = None 
 class GUINode:
     def __init__(self, parent, node):
         self.node = node
@@ -76,6 +77,7 @@ class GUINode:
         self.outputNodes = {}
         self.frame = None
         self.canEdit = True
+        self.guiparent = None
         self.x = 0
         self.y = 0
         
@@ -131,7 +133,19 @@ class GUINode:
         self.lx = event.x_root
         self.ly = event.y_root
         
+        global dragFocus
+        dragFocus = self
+        
+        self.parent.method.editted = True
+        global app
+        app.tabbedpane.create()
+        
     def mouseDrag(self, event):
+        
+        global dragFocus
+        if dragFocus != self:
+            return
+        
         self.x += event.x_root - self.lx
         self.y += event.y_root - self.ly
         
@@ -139,7 +153,7 @@ class GUINode:
         self.ly = event.y_root
         
         self.setPos(self.x, self.y)
-        
+                
     def getLinkPos(self, key, inout):
         node = None
         if inout == "Output":
@@ -219,6 +233,8 @@ class GUIArgumentNode(GUINode):
         
     def create(self, guiparent=None):
         if guiparent == None:
+            if self.guiparent == None:
+                return
             guiparent = self.guiparent
         self.guiparent = guiparent
         GUINode.create(self, guiparent)
@@ -299,6 +315,8 @@ class GUIOutputNode(GUINode):
         
     def create(self, guiparent=None):
         if guiparent == None:
+            if self.guiparent == None:
+                return
             guiparent = self.guiparent
         self.guiparent = guiparent
         GUINode.create(self, guiparent)
@@ -378,6 +396,8 @@ class GUIMethodNode(GUINode):
         self.node.update()
         
         if guiparent == None:
+            if self.guiparent == None:
+                return
             guiparent = self.guiparent
         self.guiparent = guiparent
         GUINode.create(self, guiparent)
@@ -406,6 +426,12 @@ class GUIMethodNode(GUINode):
         app.openMethod(self.node.method, self.parent.program)
         
     def verify(self):
+        
+        if self.node.method.deleted:
+            self.delete()
+            self.guiparent = None
+            return
+        
         for key in self.node.links.keys():
             if not key in self.node.method.inputs:
                 self.parent.deleteLinks(self, key)
@@ -716,6 +742,9 @@ class GUIMethod:
             
             self.nodes.append(snode)
             self.nodeMap[node] = snode
+            
+        self.lx = 0
+        self.ly = 0
                     
     def create(self, guiparent=None):
         if guiparent == None:
@@ -795,8 +824,15 @@ class GUIMethod:
     def mouseDown(self, event):
         self.lx = event.x_root
         self.ly = event.y_root
-        
+        global dragFocus
+        dragFocus = self
+           
     def mouseDrag(self, event):
+        
+        global dragFocus
+        if dragFocus != self:
+            return
+        
         dx = event.x_root - self.lx
         dy = event.y_root - self.ly
         
@@ -824,6 +860,8 @@ class GUIMethod:
         
         global app
         app.addMethod(node.method, self.program)
+        self.method.editted = True
+        app.tabbedpane.create()
         
     def addCodeNode(self):
         node = CodeNode(createEmptyMethod(self.program, code=True))
@@ -836,6 +874,10 @@ class GUIMethod:
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
         
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
     def addFileReadNode(self):
         node = FileReadNode()
         self.method.addNode(node)
@@ -847,6 +889,10 @@ class GUIMethod:
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
         
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
     def addArithmeticNode(self):
         node = ArithmeticNode()
         self.method.addNode(node)
@@ -857,6 +903,10 @@ class GUIMethod:
         
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
                         
     def addInputNode(self):
         node = ArgumentNode()
@@ -869,6 +919,10 @@ class GUIMethod:
         
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
                         
     def addOutputNode(self):
         node = OutputNode()
@@ -882,6 +936,10 @@ class GUIMethod:
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
         
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
     def addPrintNode(self):
         node = PrintNode()
         self.method.addNode(node)
@@ -893,6 +951,10 @@ class GUIMethod:
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
         
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
     def addFileWriteNode(self):
         node = FileWriteNode()
         self.method.addNode(node)
@@ -903,6 +965,10 @@ class GUIMethod:
         
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
     
     def addValueNode(self):
         node = ValueNode("Value", "'A String'")
@@ -914,6 +980,10 @@ class GUIMethod:
         
         self.create(self.guiparent)
         snode.setPos(self.clickx, self.clicky)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
     
     def removeNode(self, node):
         
@@ -926,6 +996,10 @@ class GUIMethod:
         self.nodes.remove(node)
         del self.nodeMap[node.node]
         self.method.removeNode(node.node)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
           
     def updateLinks(self):
         self.canvas.delete("Link")
@@ -949,6 +1023,10 @@ class GUIMethod:
                 links.append(link) 
         self.links = links
         self.updateLinks()
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
         
     def showMethodEdit(self):
         MethodEditWindow(self.frame, self, self.method)
@@ -1122,6 +1200,11 @@ class MethodEditWindow(Toplevel):
         self.method.inputs = self.inputs
         self.method.outputs = self.outputs
         self.parent.verify()
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
         self.destroy()
         
     def cancel(self):
@@ -1189,18 +1272,28 @@ class TabbedPane(Frame):
         self.frame = Frame(self, background="white", relief="sunken", borderwidth=2)
         self.frame.pack(fill=BOTH, expand=1, padx=2, pady=2)
 
-        self.buttonframe = Frame(self.frame, background="white", relief="sunken", borderwidth=2)
+        self.buttonframe = Frame(self.frame, background="light sky blue", relief="sunken", borderwidth=2)
         self.buttonframe.pack(anchor=N, fill=X)
         self.v = StringVar()
         if self.active != None:
             self.v.set(self.active[0])
             
         for tab in self.tabs:
-            b = Radiobutton(self.buttonframe, text="", variable=self.v, value=tab[0], indicatoron=0, command=lambda name=tab[0]: self.setActiveTab(name))
-            b.pack(side=LEFT)
-            
-            l = Label(b, text=tab[0])
-            l.pack(side=LEFT)
+            name = tab[0]
+            if tab[1].method.editted:
+                name = "*"+name
+            if self.active != None and self.active[0] == tab[0]:
+                b = Frame(self.buttonframe, background="white", relief="sunken", borderwidth=2)
+                b.pack(side=LEFT)
+                l = Label(b, text=name, background="white")
+                l.pack(side=LEFT)
+            else:
+                b = Frame(self.buttonframe, background="light sky blue", relief="raised", borderwidth=2)
+                b.bind("<Button-1>", lambda event, name=tab[0]: self.setActiveTab(name))
+                b.pack(side=LEFT)
+                l = Label(b, text=name, background="light sky blue")
+                l.bind("<Button-1>", lambda event, name=tab[0]: self.setActiveTab(name))
+                l.pack(side=LEFT)
             
             c = Button(b, text="x", command=lambda name=tab[0]: self.closeTab(name))
             c.pack(side=LEFT)
@@ -1264,11 +1357,11 @@ class TabbedPane(Frame):
 
 class MainWindow(Frame):
     def __init__(self, parent):
-        Frame.__init__(self, parent, background="sky blue")   
+        Frame.__init__(self, parent, background="light sky blue")   
          
         self.parent = parent
         
-        self.buttonFrame = Frame(self, background="sky blue")
+        self.buttonFrame = Frame(self, background="light sky blue")
         self.buttonFrame.pack(fill=X, padx=20)
         
         self.frame = Frame(self)
@@ -1279,11 +1372,23 @@ class MainWindow(Frame):
         self.tree = ttk.Treeview(self.programFrame)
         self.tree.pack(fill=BOTH, expand=1)
         
+        self.tree.bind("<Button-3>", self.programRight)
+        
+        self.progMenu = Menu(self.tree, tearoff=0)
+        self.progMenu.add_command(label="Edit", command=self.progEdit)
+        self.progMenu.add_command(label="New Method", command=self.progNew)
+        self.progMenu.add_command(label="Delete", command=self.progDelete)
+        
+        self.methMenu = Menu(self.tree, tearoff=0)
+        self.methMenu.add_command(label="Edit", command=self.methEdit)
+        self.methMenu.add_command(label="Delete", command=self.methDelete)
+        
         self.addToolbar()
         self.addTabbedPane()
         self.addConsole()
         
         self.programs = []
+        self.methods = []
         
         program = Program("TestProgram")
         method = createEmptyMethod(program, empty=True)
@@ -1340,10 +1445,11 @@ class MainWindow(Frame):
     def run(self):
         method = self.tabbedpane.getActive().method
         program = self.openMethods[method][1]
-        print subprocess.check_output(["python", program.name+".py"])
+        out = subprocess.check_output(["python", program.name+".py"])
+        Label(self.console, text=out).pack()
         
     def addProgram(self, program):
-        root_node = self.tree.insert('', 'end', text=program.name, open=True, tags="PROGRAM")
+        root_node = self.tree.insert('', 'end', text=program.name, open=True, tags=["PROGRAM", program.name])
         for method in program.methods:
             self.addMethod(method, program, root_node)
         self.programs.append((program, root_node))
@@ -1354,30 +1460,66 @@ class MainWindow(Frame):
                 if tuple[0] == program:
                     root_node = tuple[1]
                     break
-        self.tree.insert(root_node, 'end', text=method.name, open=False, tags=program.name)
+        id = self.tree.insert(root_node, 'end', text=method.name, open=False, tags=["METHOD", method.name, program.name])
+        self.methods.append((method, id))
         
         self.tree.bind("<Double-1>", self.programDouble)
         self.tree.bind("<Button-3>", self.programRight)
         
+    def programFromName(self, name):
+        for tuple in self.programs:
+            program = tuple[0]
+            if program.name == name:
+                return program
+            
+    def methodFromName(self, program, name):
+        for method in program.methods:
+            if method.name == name:
+                return method
+        
     def programDouble(self, event):
-        item = self.tree.selection()[0]
+        selects = self.tree.selection()
+        if len(selects) == 0:
+            return
+        item = selects[0]
         vals = self.tree.item(item)
         if vals["tags"][0] == "PROGRAM":
             return
-        program = None
-        method = None
-        for tuple in self.programs:
-            if tuple[0].name == vals["tags"][0]:
-                program = tuple[0]
-                break
-        for m in program.methods:
-            if m.name == vals["text"]:
-                method = m
-                break
+        program = self.programFromName(vals["tags"][2])
+        method = self.methodFromName(program, vals["tags"][1])
         self.openMethod(method, program)
         
     def programRight(self, event):
+        item = self.tree.identify_row(event.y)
+        vals = self.tree.item(item)
+        if vals["tags"][0] == "PROGRAM":
+            self.menuData = vals["tags"][1]
+            self.progMenu.post(event.x_root, event.y_root)
+        else:
+            self.menuData = vals["tags"][1:]
+            self.methMenu.post(event.x_root, event.y_root)
+            
+    def progEdit(self):
         pass
+    def progNew(self):
+        pass
+    def progDelete(self):
+        pass
+    
+    def methEdit(self):
+        pass
+    def methDelete(self):
+        program = self.programFromName(self.menuData[1])
+        method = self.methodFromName(program, self.menuData[0])
+        method.deleted = True
+        program.removeMethod(method)
+        self.tabbedpane.closeTab(method.name)
+        id = None
+        for m in self.methods:
+            if m[0] == method:
+                id = m[1]
+        self.tree.delete(id)
+        self.tabbedpane.getActive().verify()
     
     def addTabbedPane(self):
         self.tabbedpane = TabbedPane(self.frame)

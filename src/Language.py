@@ -14,7 +14,10 @@ class Program:
         
     def addMethod(self, method):
         if not method in self.methods:
-            self.methods.append(method)        
+            self.methods.append(method)  
+            
+    def removeMethod(self, method):
+        self.methods.remove(method)      
 
     def checkNameUsed(self, name):
         for method in self.methods:
@@ -43,6 +46,8 @@ class Code:
         self.setNumInputs(1)
         self.setNumOutputs(1)
         self.code = ""
+        self.editted = False
+        self.deleted = False
         
     def setNumInputs(self, num, baseName="Input"):
         prev = self.inputs
@@ -89,6 +94,8 @@ class Method:
         self.outputs = []
         self.setNumInputs(1)
         self.setNumOutputs(1)
+        self.editted = False
+        self.deleted = False
         
     def setNumInputs(self, num, baseName="Input"):
         prev = self.inputs
