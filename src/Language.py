@@ -5,6 +5,7 @@ Created on 29 Jan 2014
 '''
 
 import Queue
+import copy
 
 class Program:
     def __init__(self, name):
@@ -34,6 +35,52 @@ class Program:
         code += "program." + mainMethod.name + "()"
         return code
 
+class Code:
+    def __init__(self, name):
+        self.name = name
+        self.inputs = []
+        self.outputs = []
+        self.setNumInputs(1)
+        self.setNumOutputs(1)
+        self.code = ""
+        
+    def setNumInputs(self, num, baseName="Input"):
+        prev = self.inputs
+        self.inputs = [""] * num
+        for i in range(num):
+            if i < len(prev) :
+                self.inputs[i] = prev[i]
+            else :
+                self.inputs[i] = baseName+str(i)
+            
+    def setNumOutputs(self, num, baseName="Output"):
+        prev = self.outputs
+        self.outputs = [""] * num
+        for i in range(num):
+            if i < len(prev) :
+                self.outputs[i] = prev[i]
+            else :
+                self.outputs[i] = baseName+str(i)
+    
+    def compile(self):
+        
+        argument = "\tdef " + self.name + "(self"
+        for arg in self.inputs:
+            argument += ", " + arg
+        argument += "):\n\t\t"
+        
+        output = "return ("
+        first = True
+        for out in self.outputs:
+            if first:
+                first = False
+            else:
+                output += ", "
+            output += out
+        output += ")"
+        
+        return argument + self.code.replace("\n", "\n\t\t") + output
+                
 class Method:
     def __init__(self, name):
         self.name = name
@@ -74,6 +121,9 @@ class Method:
         processList = Queue.Queue() 
         data = {}
         data["Queue"] = processList
+        data["NameMap"] = {}
+        data["NameMap"]["Used"] = copy.deepcopy(self.inputs)
+        data["NameMap"]["Arguments"] = copy.deepcopy(self.inputs)
         data["Return"] = {}
         data["Code"] = []
         
@@ -150,6 +200,28 @@ class Node:
                 
     def update(self):
         pass
+    
+    def getMappedName(self, node, name, nameMap):
+        if node in nameMap and name in nameMap[node]:
+            return nameMap[node][name]
+        elif name in nameMap["Arguments"]:
+            return name
+        else:
+            usedNames = nameMap["Used"]
+                
+            bn = "value"
+            i = 0
+            nn = bn + str(i)
+            while nn in usedNames:
+                i+=1
+                nn = bn + str(i)
+            
+            usedNames.append(nn)
+            
+            if not node in nameMap:
+                nameMap[node] = {}
+            nameMap[node][name] = nn
+            return nn
 
 class StartNode(Node):
     pass
@@ -180,7 +252,7 @@ class ValueNode(StartNode):
         self.links[name] = ()
     
     def process(self, data):    
-        code = self.links.keys()[0] + " = " + self.name
+        code = self.getMappedName(self, self.links.keys()[0], data["NameMap"])  + " = " + self.name
         data["Code"].append((self.priority, code))
     
 class OutputNode(TerminalNode):
@@ -201,15 +273,8 @@ class OutputNode(TerminalNode):
                 continue
             
             (node, nodename) = self.links[key]
-            
-            # Queue if needed
-            if not node.added:
-                data["Queue"].put_nowait(node)
-                node.added = True
-            if self.priority+1 > node.priority :
-                node.priority = self.priority+1
                 
-            data["Return"][key] = nodename
+            data["Return"][key] = self.getMappedName(node, nodename, data["NameMap"])
 
 class PrintNode(TerminalNode):
     def __init__(self):
@@ -218,7 +283,7 @@ class PrintNode(TerminalNode):
         self.links["Print"] = ()
         
     def process(self, data):
-        code = "print " + self.links["Print"][1]
+        code = "print " + self.getMappedName(self.links["Print"][0], self.links["Print"][1], data["NameMap"])
         data["Code"].append((self.priority, code))
         
 class FileWriteNode(TerminalNode):
@@ -230,8 +295,8 @@ class FileWriteNode(TerminalNode):
         self.links["Contents"] = ()
         
     def process(self, data):
-        code = "file = open(" + self.links["Filename"][1] + ", 'w')\n\t\t"
-        code += "file.write(" + self.links["Contents"][1] + ")\n\t\t"
+        code = "file = open(" + self.getMappedName(self.links["Filename"][0], self.links["Filename"][1], data["NameMap"]) + ", 'w')\n\t\t"
+        code += "file.write(" + self.getMappedName(self.links["Contents"][0], self.links["Contents"][1], data["NameMap"]) + ")\n\t\t"
         code += "file.close()"
         data["Code"].append((self.priority, code))
 
@@ -245,7 +310,7 @@ class FileReadNode(Node):
         self.outputs.append("Contents")
     
     def process(self, data):
-        code = "file = open(" + self.links["Filename"][1] + ", 'r')\n\t\t"
+        code = "file = open(" + self.getMappedName(self.links["Filename"][0], self.links["Filename"][1], data["NameMap"]) + ", 'rb')\n\t\t"
         code += "Contents = file.read()\n\t\t"
         code += "file.close()"
         data["Code"].append((self.priority, code))
@@ -271,7 +336,7 @@ class ArithmeticNode(Node):
                 self.links[key] = prevlinks[key]
     
     def process(self, data):
-        code = "Result = "
+        code = self.getMappedName(self, self.outputs[0], data["NameMap"]) + " = "
         num = len(self.links)
         
         operator = "+"
@@ -288,7 +353,7 @@ class ArithmeticNode(Node):
             link = self.links["Input"+str(i)]
             if i > 0:
                 code += " " + operator + " "
-            code += link[1]
+            code += self.getMappedName(link[0], link[1], data["NameMap"])
             if num > 1 and i > 0 and i < num-1:
                 code += ")"
         
@@ -320,9 +385,9 @@ class MethodNode(Node):
                 string += ", "
             else :
                 first = False
-            string += key
+            string += self.getMappedName(self, key, data["NameMap"])
             
-        string += ") = " + self.method.name + "("
+        string += ") = self." + self.method.name + "("
         
         first = True
         for key in self.links.keys() :
@@ -331,11 +396,14 @@ class MethodNode(Node):
                 string += ", "
             else :
                 first = False
-            string += nodename
+            string += self.getMappedName(node, nodename, data["NameMap"])
         
         string += ")"
         
         data["Code"].append((self.priority, string))
+        
+class CodeNode(MethodNode):
+    pass
 
 def createPassThroughMethod(name, num):
     method = Method(name)
