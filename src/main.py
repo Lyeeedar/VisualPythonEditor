@@ -1,5 +1,6 @@
 
 from Tkinter import *
+import tkMessageBox
 from Language import *
 import ttk
 import subprocess
@@ -101,13 +102,13 @@ class GUINode:
         self.linkframe.grid(row=1, sticky=N+S+E+W)
         Grid.columnconfigure(self.linkframe, 0, weight=1)
         Grid.columnconfigure(self.linkframe, 1, weight=1)
-        
+                
         self.updateLinks()
         
         self.frame.place(x=self.x, y=self.y)
         
         self.createMenu()
-        
+                
     def createMenu(self):
         self.title.bind("<Button-3>", self.mouseRight)
         
@@ -138,7 +139,7 @@ class GUINode:
         
         self.parent.method.editted = True
         global app
-        app.tabbedpane.create()
+        app.tabbedpane.create(True)
         
     def mouseDrag(self, event):
         
@@ -160,7 +161,7 @@ class GUINode:
             node = self.outputNodes[key]
         else:
             node = self.inputNodes[key]
-        
+                    
         x = self.x+self.linkframe.winfo_x()+node.label.winfo_x()+(node.label.winfo_width()/2)
         y = self.y+self.linkframe.winfo_y()+node.label.winfo_y()+(node.label.winfo_height()/2)
         
@@ -647,7 +648,7 @@ class GUIArithmeticEditFrame(Toplevel):
         MODES = ["Add", "Subtract", "Multiply", "Divide"]
         
         self.v = StringVar()
-        self.v.set(MODES[0])
+        self.v.set(self.node.node.name)
         
         i = 1
         for mode in MODES:
@@ -688,7 +689,56 @@ class GUIArithmeticNode(GUIMethodNode):
         GUIArithmeticEditFrame(self.frame, self.parent.method, self)
     def verify(self):
         pass
-                
+    
+class GUIConditionalSelectorEditFrame(Toplevel):
+    def __init__(self, parent, method, node):
+        Toplevel.__init__(self, parent, background="white")
+        self.geometry("360x240+300+300") 
+         
+        self.parent = parent
+        self.method = method
+        self.node = node
+        
+        self.frame = Frame(self)
+        self.create()
+        self.frame.pack(fill=BOTH, expand=1)
+        
+    def create(self):
+        Grid.columnconfigure(self.frame, 0, weight=1)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        
+        Label(self.frame, text="Operation").grid(row=0, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        MODES = ["Equals", "Greater Than", "Equal Or Greater Than", "Less Than", "Equal Or Less Than"]
+        
+        self.v = StringVar()
+        self.v.set(self.node.node.name)
+        
+        i = 1
+        for mode in MODES:
+            b = Radiobutton(self.frame, text=mode,
+                            variable=self.v, value=mode)
+            b.grid(row=i, column=0, columnspan=2, sticky=W)
+            i+=1
+        
+        Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
+        Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
+        
+    def apply(self):
+        self.node.node.setOperator(self.v.get())
+        
+        self.node.create()
+        self.destroy()
+                    
+    def cancel(self):
+        self.destroy()
+
+class GUIConditionalSelectorNode(GUIMethodNode):
+    def edit(self):
+        GUIConditionalSelectorEditFrame(self.frame, self.parent.method, self)
+    def verify(self):
+        pass
+         
 class GUIFileReadNode(GUIMethodNode):
     
     def __init__(self, parent, node):
@@ -714,6 +764,214 @@ class GUIPrintNode(GUIOutputNode):
         self.canEdit = False
     def edit(self):
         pass
+    def verify(self):
+        pass
+
+class GUIMethodChooserFrame(Toplevel):
+    def __init__(self, guiparent, parent, program):
+        Toplevel.__init__(self, guiparent, background="white")
+        self.geometry("360x240+300+300") 
+         
+        self.parent = parent
+        self.program = program
+        
+        self.frame = Frame(self)
+        self.create()
+        self.frame.pack(fill=BOTH, expand=1)
+        
+    def create(self):
+        Grid.columnconfigure(self.frame, 0, weight=1)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        
+        i=0
+        Label(self.frame, text="Method Selection").grid(row=i, columnspan=2, sticky=N+S+E+W)
+        
+        i+=1
+        
+        self.v = StringVar()
+        
+        self.canvas = Canvas(self.frame)
+        self.canvas.grid(row=i, rowspan=10, columnspan=2)
+        
+        i+=10
+        
+        frame = Frame(self.canvas)
+        self.canvas.create_window(self.canvas.winfo_width()/2, 0, anchor=NW, window=frame)
+        frame.pack()
+        
+        first = True
+        for method in self.program.methods:
+            if isinstance(method, Code):
+                continue
+            b = Radiobutton(frame, text=method.name,
+                            variable=self.v, value=method.name,
+                            indicatoron=0)
+            b.pack()
+            if first:
+                self.v.set(method.name)
+                first = False
+            
+        Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
+        Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
+        
+    def apply(self):
+        
+        method = None
+        for m in self.program.methods:
+            if m.name == self.v.get():
+                method = m
+                break
+             
+        node = MethodNode(method)
+        self.parent.method.addNode(node)
+        
+        snode = GUIMethodNode(self.parent, node)
+        self.parent.nodes.append(snode)
+        self.parent.nodeMap[node] = snode
+        
+        self.parent.create(self.parent.guiparent)
+        snode.setPos(self.parent.clickx, self.parent.clicky)
+        
+        self.parent.method.editted = True
+        
+        self.destroy()
+                    
+    def cancel(self):
+        self.destroy()
+
+class GUICSVParserEditFrame(Toplevel):
+    def __init__(self, parent, method, node):
+        Toplevel.__init__(self, parent, background="white")
+        self.geometry("360x240+300+300") 
+         
+        self.parent = parent
+        self.method = method
+        self.node = node
+        
+        self.frame = Frame(self)
+        self.create()
+        self.frame.pack(fill=BOTH, expand=1)
+        
+    def create(self):
+        Grid.columnconfigure(self.frame, 0, weight=1)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        
+        i = 0
+        
+        Label(self.frame, text="Delimiter").grid(row=i, column=0, sticky=N+S+E+W)
+        self.delimiter = Entry(self.frame)
+        self.delimiter.grid(row=i, column=1, sticky=N+S+E+W)
+        self.delimiter.insert(0, self.node.node.delimiter)
+        
+        i+=1
+        
+        Label(self.frame, text="Quote Character").grid(row=i, column=0, sticky=N+S+E+W)
+        self.quote = Entry(self.frame)
+        self.quote.grid(row=i, column=1, sticky=N+S+E+W)
+        self.quote.insert(0, self.node.node.quotechar)
+        
+        i+=1
+        
+        Label(self.frame, text="Datatype").grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        i+=1
+        
+        MODES = [("Float", "float"), ("Integer", "int"), ("String", "str")]
+        
+        self.v = StringVar()
+        self.v.set(self.node.node.datatype)
+        
+        for mode, val in MODES:
+            b = Radiobutton(self.frame, text=mode,
+                            variable=self.v, value=val)
+            b.grid(row=i, column=0, columnspan=2, sticky=W)
+            i+=1
+        
+        Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
+        Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
+        
+    def apply(self):
+        self.node.node.delimiter = self.delimiter.get()
+        self.node.node.quotechar = self.quote.get()
+        self.node.node.datatype = self.v.get()
+        
+        self.node.create()
+        self.destroy()
+                    
+    def cancel(self):
+        self.destroy()
+
+class GUICSVParserNode(GUIMethodNode):
+    def edit(self):
+        GUICSVParserEditFrame(self.frame, self.parent.method, self)
+    def verify(self):
+        pass
+    
+class GUIDataSettingsEditFrame(Toplevel):
+    def __init__(self, parent, method, node):
+        Toplevel.__init__(self, parent, background="white")
+        self.geometry("360x240+300+300") 
+         
+        self.parent = parent
+        self.method = method
+        self.node = node
+        
+        self.frame = Frame(self)
+        self.create()
+        self.frame.pack(fill=BOTH, expand=1)
+        
+    def create(self):
+        Grid.columnconfigure(self.frame, 0, weight=1)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        
+        i = 0
+        
+        Label(self.frame, text="Iteration Type").grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        i+=1
+        
+        MODES = [("Wrapped", "Wrapped"), ("Single", "Single")]
+        
+        self.iteration = StringVar()
+        self.iteration.set(self.node.node.iteration)
+        
+        for mode, val in MODES:
+            b = Radiobutton(self.frame, text=mode,
+                            variable=self.iteration, value=val)
+            b.grid(row=i, column=0, columnspan=2, sticky=W)
+            i+=1
+        
+        Label(self.frame, text="Orientation").grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        i+=1
+        
+        MODES = [("Row", "Row"), ("Column", "Column")]
+        
+        self.orientation = StringVar()
+        self.orientation.set(self.node.node.orientation)
+        
+        for mode, val in MODES:
+            b = Radiobutton(self.frame, text=mode,
+                            variable=self.orientation, value=val)
+            b.grid(row=i, column=0, columnspan=2, sticky=W)
+            i+=1
+        
+        Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
+        Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
+        
+    def apply(self):
+        self.node.node.iteration = self.iteration.get()
+        self.node.node.orientation = self.orientation.get()
+        
+        self.node.create()
+        self.destroy()
+                    
+    def cancel(self):
+        self.destroy()
+    
+class GUIDataSettingsNode(GUIMethodNode):
+    def edit(self):
+        GUIDataSettingsEditFrame(self.frame, self.parent.method, self)
     def verify(self):
         pass
 
@@ -765,10 +1023,13 @@ class GUIMethod:
         
         # create a popup menu
         self.aMenu = Menu(self.frame, tearoff=0)
+        self.aMenu.add_command(label="New Data Settings", command=self.addDataSettingsNode)
         self.aMenu.add_command(label="New Method Node", command=self.addMethodNode)
         self.aMenu.add_command(label="New Code Node", command=self.addCodeNode)
         self.aMenu.add_command(label="New File Read Node", command=self.addFileReadNode)
+        self.aMenu.add_command(label="New CSV Parser Node", command=self.addCSVParserNode)
         self.aMenu.add_command(label="New Arithmetic Node", command=self.addArithmeticNode)
+        self.aMenu.add_command(label="New Conditional Selector Node", command=self.addConditionalSelectorNode)
         self.aMenu.add_command(label="New Input Node", command=self.addInputNode)
         self.aMenu.add_command(label="New Value Node", command=self.addValueNode)
         self.aMenu.add_command(label="New Output Node", command=self.addOutputNode)
@@ -848,20 +1109,7 @@ class GUIMethod:
         self.clicky = event.y
 
     def addMethodNode(self):
-        node = MethodNode(createEmptyMethod(self.program))
-        self.method.addNode(node)
-        
-        snode = GUIMethodNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        app.addMethod(node.method, self.program)
-        self.method.editted = True
-        app.tabbedpane.create()
+        GUIMethodChooserFrame(self.canvas, self, self.program)
         
     def addCodeNode(self):
         node = CodeNode(createEmptyMethod(self.program, code=True))
@@ -877,7 +1125,22 @@ class GUIMethod:
         global app
         self.method.editted = True
         app.tabbedpane.create()
+    
+    def addDataSettingsNode(self):
+        node = DataSettingsNode()
+        self.method.addNode(node)
         
+        snode = GUIDataSettingsNode(self, node)
+        self.nodes.append(snode)
+        self.nodeMap[node] = snode
+        
+        self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+    
     def addFileReadNode(self):
         node = FileReadNode()
         self.method.addNode(node)
@@ -893,11 +1156,43 @@ class GUIMethod:
         self.method.editted = True
         app.tabbedpane.create()
         
+    def addCSVParserNode(self):
+        node = CSVParserNode()
+        self.method.addNode(node)
+        
+        snode = GUICSVParserNode(self, node)
+        self.nodes.append(snode)
+        self.nodeMap[node] = snode
+        
+        self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
+        self.program.addImport("import csv")
+        
     def addArithmeticNode(self):
         node = ArithmeticNode()
         self.method.addNode(node)
         
         snode = GUIArithmeticNode(self, node)
+        self.nodes.append(snode)
+        self.nodeMap[node] = snode
+        
+        self.create(self.guiparent)
+        snode.setPos(self.clickx, self.clicky)
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
+    def addConditionalSelectorNode(self):
+        node = ConditionalSelectorNode()
+        self.method.addNode(node)
+        
+        snode = GUIConditionalSelectorNode(self, node)
         self.nodes.append(snode)
         self.nodeMap[node] = snode
         
@@ -988,10 +1283,10 @@ class GUIMethod:
     def removeNode(self, node):
         
         for key in node.inputNodes.keys():
-            self.deleteLinks(node, key)
+            self.deleteLinks(node, key, False)
             
         for key in node.outputNodes.keys():
-            self.deleteLinks(node, key)
+            self.deleteLinks(node, key, False)
         
         self.nodes.remove(node)
         del self.nodeMap[node.node]
@@ -1000,6 +1295,7 @@ class GUIMethod:
         global app
         self.method.editted = True
         app.tabbedpane.create()
+        self.updateLinks()
           
     def updateLinks(self):
         self.canvas.delete("Link")
@@ -1014,7 +1310,7 @@ class GUIMethod:
         elif link[1][0] == node and link[1][1] == key:
             return True
         return False
-    def deleteLinks(self, node, key):
+    def deleteLinks(self, node, key, update=True):
         links = []
         for link in self.links:
             if self.comparison(node, key, link):
@@ -1022,11 +1318,13 @@ class GUIMethod:
             else:
                 links.append(link) 
         self.links = links
-        self.updateLinks()
         
         global app
         self.method.editted = True
-        app.tabbedpane.create()
+        
+        if update:
+            self.updateLinks()
+            app.tabbedpane.create()
         
     def showMethodEdit(self):
         MethodEditWindow(self.frame, self, self.method)
@@ -1264,16 +1562,26 @@ class TabbedPane(Frame):
         self.tabs = []
         self.active = None
         self.frame = Frame(self)
+        self.bf = Frame(self)
         self.pack(fill=BOTH, expand=1)
         
-    def create(self):
-        self.frame.destroy()
+    def create(self, buttonsonly=False):
         
-        self.frame = Frame(self, background="white", relief="sunken", borderwidth=2)
-        self.frame.pack(fill=BOTH, expand=1, padx=2, pady=2)
+        if not buttonsonly:
+            self.frame.destroy()
+        
+            self.frame = Frame(self, background="white", relief="sunken", borderwidth=2)
+            self.frame.pack(fill=BOTH, expand=1, padx=2, pady=2)
 
-        self.buttonframe = Frame(self.frame, background="light sky blue", relief="sunken", borderwidth=2)
-        self.buttonframe.pack(anchor=N, fill=X)
+            self.buttonframe = Frame(self.frame, background="light sky blue", relief="sunken", borderwidth=2)
+            self.buttonframe.pack(anchor=N, fill=X)
+            
+        buttframe = Frame(self.buttonframe, background="light sky blue", relief="sunken", borderwidth=2)
+        buttframe.pack(anchor=N, fill=X)
+        
+        self.bf.destroy()
+        self.bf = buttframe
+            
         self.v = StringVar()
         if self.active != None:
             self.v.set(self.active[0])
@@ -1283,30 +1591,35 @@ class TabbedPane(Frame):
             if tab[1].method.editted:
                 name = "*"+name
             if self.active != None and self.active[0] == tab[0]:
-                b = Frame(self.buttonframe, background="white", relief="sunken", borderwidth=2)
+                b = Frame(buttframe, background="white", relief="sunken", borderwidth=2)
                 b.pack(side=LEFT)
                 l = Label(b, text=name, background="white")
                 l.pack(side=LEFT)
             else:
-                b = Frame(self.buttonframe, background="light sky blue", relief="raised", borderwidth=2)
+                b = Frame(buttframe, background="light sky blue", relief="raised", borderwidth=2)
                 b.bind("<Button-1>", lambda event, name=tab[0]: self.setActiveTab(name))
                 b.pack(side=LEFT)
                 l = Label(b, text=name, background="light sky blue")
                 l.bind("<Button-1>", lambda event, name=tab[0]: self.setActiveTab(name))
                 l.pack(side=LEFT)
             
-            c = Button(b, text="x", command=lambda name=tab[0]: self.closeTab(name))
+            c = Button(b, text="x", command=lambda name=tab[0], confirm=tab[1].method.editted: self.closeTab(name, confirm))
             c.pack(side=LEFT)
-
-        self.methodframe = Frame(self.frame)
-        self.methodframe.pack(anchor=N, fill=BOTH, expand=1)
-        if self.active != None:
-            self.active[1].create(self.methodframe)
-        else:
-            f = Frame(self.methodframe)
-            f.pack(fill=BOTH, expand=1)
+            
+        if not buttonsonly:
+            self.methodframe = Frame(self.frame)
+            self.methodframe.pack(anchor=N, fill=BOTH, expand=1)
+            if self.active != None:
+                self.active[1].create(self.methodframe)
+            else:
+                f = Frame(self.methodframe)
+                f.pack(fill=BOTH, expand=1)
         
-    def closeTab(self, name):
+    def closeTab(self, name, confirm):
+        if confirm:
+            result = tkMessageBox.askquestion("Close", "Close Without Saving? Are You Sure?", icon='warning')
+            if result != 'yes':
+                return
         i=0
         for tab in self.tabs:
             if tab[0] == name:
@@ -1328,7 +1641,6 @@ class TabbedPane(Frame):
         for tab in self.tabs:
             if name == tab[0]:
                 found = True
-                print "found"
                 break
         
         if not found:
@@ -1353,6 +1665,8 @@ class TabbedPane(Frame):
                 return
         
     def getActive(self):
+        if self.active == None:
+            return None
         return self.active[1]
 
 class MainWindow(Frame):
@@ -1382,6 +1696,9 @@ class MainWindow(Frame):
         self.methMenu = Menu(self.tree, tearoff=0)
         self.methMenu.add_command(label="Edit", command=self.methEdit)
         self.methMenu.add_command(label="Delete", command=self.methDelete)
+        
+        self.otherMenu = Menu(self.tree, tearoff=0)
+        self.otherMenu.add_command(label="New Program", command=self.otherProg)
         
         self.addToolbar()
         self.addTabbedPane()
@@ -1491,24 +1808,41 @@ class MainWindow(Frame):
         
     def programRight(self, event):
         item = self.tree.identify_row(event.y)
-        vals = self.tree.item(item)
-        if vals["tags"][0] == "PROGRAM":
-            self.menuData = vals["tags"][1]
-            self.progMenu.post(event.x_root, event.y_root)
+        
+        if item == '':
+            self.otherMenu.post(event.x_root, event.y_root)
         else:
-            self.menuData = vals["tags"][1:]
-            self.methMenu.post(event.x_root, event.y_root)
-            
+            vals = self.tree.item(item)
+            if vals["tags"][0] == "PROGRAM":
+                self.menuData = vals["tags"][1:]
+                self.progMenu.post(event.x_root, event.y_root)
+            else:
+                self.menuData = vals["tags"][1:]
+                self.methMenu.post(event.x_root, event.y_root)
+    
+    def otherProg(self):
+        pass
+    
     def progEdit(self):
         pass
     def progNew(self):
-        pass
+        print self.menuData[0]
+        program = self.programFromName(self.menuData[0])
+        method = createEmptyMethod(program)
+        self.openMethod(method, program)
+        self.addMethod(method, program)
+        
     def progDelete(self):
         pass
     
     def methEdit(self):
-        pass
+        program = self.programFromName(self.menuData[1])
+        method = self.methodFromName(program, self.menuData[0])
+        self.openMethod(method, program)
     def methDelete(self):
+        result = tkMessageBox.askquestion("Delete", "Are You Sure?", icon='warning')
+        if result != 'yes':
+            return
         program = self.programFromName(self.menuData[1])
         method = self.methodFromName(program, self.menuData[0])
         method.deleted = True
@@ -1519,7 +1853,9 @@ class MainWindow(Frame):
             if m[0] == method:
                 id = m[1]
         self.tree.delete(id)
-        self.tabbedpane.getActive().verify()
+        active = self.tabbedpane.getActive()
+        if active != None:
+            active.verify()
     
     def addTabbedPane(self):
         self.tabbedpane = TabbedPane(self.frame)
