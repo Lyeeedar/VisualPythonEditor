@@ -1,9 +1,12 @@
 
 from Tkinter import *
 import tkMessageBox
+import tkSimpleDialog
+from tkFileDialog import askopenfilename
 from Language import *
 import ttk
 import subprocess
+import pickle
 
 class GUIInput:
     def __init__(self, parent, name):
@@ -79,8 +82,8 @@ class GUINode:
         self.frame = None
         self.canEdit = True
         self.guiparent = None
-        self.x = 0
-        self.y = 0
+        self.x = node.x
+        self.y = node.y
         
     def create(self, guiparent=None):
         if self.frame != None:
@@ -122,6 +125,8 @@ class GUINode:
         self.x = x
         self.y = y
         self.frame.place(x=self.x, y=self.y)
+        self.node.x = x
+        self.node.y = y
         
         self.parent.updateLinks()
         
@@ -250,9 +255,7 @@ class GUIArgumentNode(GUINode):
             self.outputNodes[key] = link
             link.label.grid(row=i, column=1, sticky=N+S+E+W, pady=2)
             i += 1
-        
-        createToolTip(self.frame, "Values passed into the method by other methods")     
-      
+              
     def mouseRight(self, event):
         self.aMenu.post(event.x_root, event.y_root)
     
@@ -778,7 +781,7 @@ class GUIMethodChooserFrame(Toplevel):
         self.frame = Frame(self)
         self.create()
         self.frame.pack(fill=BOTH, expand=1)
-        
+               
     def create(self):
         Grid.columnconfigure(self.frame, 0, weight=1)
         Grid.columnconfigure(self.frame, 1, weight=1)
@@ -815,7 +818,7 @@ class GUIMethodChooserFrame(Toplevel):
         Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
         
     def apply(self):
-        
+        print "apply"
         method = None
         for m in self.program.methods:
             if m.name == self.v.get():
@@ -837,6 +840,7 @@ class GUIMethodChooserFrame(Toplevel):
         self.destroy()
                     
     def cancel(self):
+        print "destory"
         self.destroy()
 
 class GUICSVParserEditFrame(Toplevel):
@@ -904,6 +908,15 @@ class GUICSVParserEditFrame(Toplevel):
 class GUICSVParserNode(GUIMethodNode):
     def edit(self):
         GUICSVParserEditFrame(self.frame, self.parent.method, self)
+    def verify(self):
+        pass
+    
+class GUIScatterPlotNode(GUIOutputNode):
+    def __init__(self, parent, node):
+        GUIOutputNode.__init__(self, parent, node)
+        self.canEdit = False
+    def edit(self):
+        pass
     def verify(self):
         pass
     
@@ -997,12 +1010,34 @@ class GUIMethod:
                 snode = GUIOutputNode(self, node)
             elif isinstance(node, MethodNode):
                 snode = GUIMethodNode(self, node)
+            elif isinstance(node, CodeNode):
+                snode = GUICodeNode(self, node)
+            elif isinstance(node, ValueNode):
+                snode = GUIValueNode(self, node)
+            elif isinstance(node, PrintNode):
+                snode = GUIPrintNode(self, node)
+            elif isinstance(node, FileWriteNode):
+                snode = GUIFileWriteNode(self, node)
+            elif isinstance(node, FileReadNode):
+                snode = GUIFileReadNode(self, node)
+            elif isinstance(node, ArithmeticNode):
+                snode = GUIArithmeticNode(self, node)
+            elif isinstance(node, ConditionalSelectorNode):
+                snode = GUIConditionalSelectorNode(self, node)
+            elif isinstance(node, CSVParserNode):
+                snode = GUICSVParserNode(self, node)
+            elif isinstance(node, ScatterPlotNode):
+                snode = GUIScatterPlotNode(self, node)
+            elif isinstance(node, DataSettingsNode):
+                snode = GUIDataSettingsNode(self, node)
             
             self.nodes.append(snode)
             self.nodeMap[node] = snode
             
         self.lx = 0
         self.ly = 0
+        self.clickx = 0
+        self.clicky = 0
                     
     def create(self, guiparent=None):
         if guiparent == None:
@@ -1023,18 +1058,25 @@ class GUIMethod:
         
         # create a popup menu
         self.aMenu = Menu(self.frame, tearoff=0)
-        self.aMenu.add_command(label="New Data Settings", command=self.addDataSettingsNode)
-        self.aMenu.add_command(label="New Method Node", command=self.addMethodNode)
-        self.aMenu.add_command(label="New Code Node", command=self.addCodeNode)
-        self.aMenu.add_command(label="New File Read Node", command=self.addFileReadNode)
-        self.aMenu.add_command(label="New CSV Parser Node", command=self.addCSVParserNode)
-        self.aMenu.add_command(label="New Arithmetic Node", command=self.addArithmeticNode)
-        self.aMenu.add_command(label="New Conditional Selector Node", command=self.addConditionalSelectorNode)
-        self.aMenu.add_command(label="New Input Node", command=self.addInputNode)
-        self.aMenu.add_command(label="New Value Node", command=self.addValueNode)
-        self.aMenu.add_command(label="New Output Node", command=self.addOutputNode)
-        self.aMenu.add_command(label="New Print Node", command=self.addPrintNode)
-        self.aMenu.add_command(label="New File Write Node", command=self.addFileWriteNode)
+        
+        self.aMenu.add_command(label="New Input Node", command=lambda method=self: addInputNode(method))
+        self.aMenu.add_command(label="New Value Node", command=lambda method=self: addValueNode(method))
+        self.aMenu.add_separator()
+        self.aMenu.add_command(label="New Data Settings", command=lambda method=self: addDataSettingsNode(method))
+        self.aMenu.add_command(label="New Method Node", command=lambda method=self: addMethodNode(method))
+        self.aMenu.add_command(label="New Code Node", command=lambda method=self: addCodeNode(method))
+        self.aMenu.add_separator()
+        self.aMenu.add_command(label="New Arithmetic Node", command=lambda method=self: addArithmeticNode(method))
+        self.aMenu.add_command(label="New Conditional Selector Node", command=lambda method=self: addConditionalSelectorNode(method))
+        self.aMenu.add_separator()
+        self.aMenu.add_command(label="New Output Node", command=lambda method=self: addOutputNode(method))
+        self.aMenu.add_command(label="New Print Node", command=lambda method=self: addPrintNode(method))
+        self.aMenu.add_command(label="New Scatter Plot Node", command=lambda method=self: addScatterPlotNode(method))
+        self.aMenu.add_separator()
+        self.aMenu.add_command(label="New File Read Node", command=lambda method=self: addFileReadNode(method))
+        self.aMenu.add_command(label="New File Write Node", command=lambda method=self: addFileWriteNode(method))
+        self.aMenu.add_command(label="New CSV Parser Node", command=lambda method=self: addCSVParserNode(method))
+        self.aMenu.add_separator()
         self.aMenu.add_command(label="Edit Method", command=self.showMethodEdit)
         
         for node in self.nodes:
@@ -1042,7 +1084,7 @@ class GUIMethod:
             self.canvas.create_window(node.x, node.y, anchor=NW, window=node.frame)
         
         self.updateLinks()
-            
+     
     def destroy(self):
         self.frame.destroy()
         for node in self.nodes:
@@ -1108,178 +1150,6 @@ class GUIMethod:
         self.clickx = event.x
         self.clicky = event.y
 
-    def addMethodNode(self):
-        GUIMethodChooserFrame(self.canvas, self, self.program)
-        
-    def addCodeNode(self):
-        node = CodeNode(createEmptyMethod(self.program, code=True))
-        self.method.addNode(node)
-        
-        snode = GUICodeNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-    
-    def addDataSettingsNode(self):
-        node = DataSettingsNode()
-        self.method.addNode(node)
-        
-        snode = GUIDataSettingsNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-    
-    def addFileReadNode(self):
-        node = FileReadNode()
-        self.method.addNode(node)
-        
-        snode = GUIFileReadNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-        
-    def addCSVParserNode(self):
-        node = CSVParserNode()
-        self.method.addNode(node)
-        
-        snode = GUICSVParserNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-        
-        self.program.addImport("import csv")
-        
-    def addArithmeticNode(self):
-        node = ArithmeticNode()
-        self.method.addNode(node)
-        
-        snode = GUIArithmeticNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-        
-    def addConditionalSelectorNode(self):
-        node = ConditionalSelectorNode()
-        self.method.addNode(node)
-        
-        snode = GUIConditionalSelectorNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-                        
-    def addInputNode(self):
-        node = ArgumentNode()
-        node.set([self.method.inputs[0]])
-        self.method.addNode(node)
-        
-        snode = GUIArgumentNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-                        
-    def addOutputNode(self):
-        node = OutputNode()
-        node.set([self.method.outputs[0]])
-        self.method.addNode(node)
-        
-        snode = GUIOutputNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-        
-    def addPrintNode(self):
-        node = PrintNode()
-        self.method.addNode(node)
-        
-        snode = GUIPrintNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-        
-    def addFileWriteNode(self):
-        node = FileWriteNode()
-        self.method.addNode(node)
-        
-        snode = GUIFileWriteNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-    
-    def addValueNode(self):
-        node = ValueNode("Value", "'A String'")
-        self.method.addNode(node)
-        
-        snode = GUIValueNode(self, node)
-        self.nodes.append(snode)
-        self.nodeMap[node] = snode
-        
-        self.create(self.guiparent)
-        snode.setPos(self.clickx, self.clicky)
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-    
     def removeNode(self, node):
         
         for key in node.inputNodes.keys():
@@ -1333,11 +1203,197 @@ class GUIMethod:
         for node in self.nodes:
             node.verify()
             node.create()
+
+def addMethodNode(method):
+    GUIMethodChooserFrame(method.canvas, method, method.program)
+    method.method.editted = True
         
+def addCodeNode(method):
+    node = CodeNode(createEmptyMethod(method.program, code=True))
+    method.method.addNode(node)
+        
+    snode = GUICodeNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+       
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+       
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+    
+def addDataSettingsNode(method):
+    node = DataSettingsNode()
+    method.method.addNode(node)
+        
+    snode = GUIDataSettingsNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+    
+def addFileReadNode(method):
+    node = FileReadNode()
+    method.method.addNode(node)
+       
+    snode = GUIFileReadNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+        
+def addCSVParserNode(method):
+    node = CSVParserNode()
+    method.method.addNode(node)
+        
+    snode = GUICSVParserNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+    
+def addScatterPlotNode(method):
+    node = ScatterPlotNode()
+    method.method.addNode(node)
+        
+    snode = GUIScatterPlotNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+      
+def addArithmeticNode(method):
+    node = ArithmeticNode()
+    method.method.addNode(node)
+        
+    snode = GUIArithmeticNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+        
+def addConditionalSelectorNode(method):
+    node = ConditionalSelectorNode()
+    method.method.addNode(node)
+        
+    snode = GUIConditionalSelectorNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+                        
+def addInputNode(method):
+    node = ArgumentNode()
+    node.set(method.method.inputs)
+    method.method.addNode(node)
+        
+    snode = GUIArgumentNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+                        
+def addOutputNode(method):
+    node = OutputNode()
+    node.set(method.method.outputs)
+    method.method.addNode(node)
+        
+    snode = GUIOutputNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+        
+def addPrintNode(method):
+    node = PrintNode()
+    method.method.addNode(node)
+      
+    snode = GUIPrintNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+        
+def addFileWriteNode(method):
+    node = FileWriteNode()
+    method.method.addNode(node)
+        
+    snode = GUIFileWriteNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+    
+def addValueNode(method):
+    node = ValueNode("Value", "'A String'")
+    method.method.addNode(node)
+        
+    snode = GUIValueNode(method, node)
+    method.nodes.append(snode)
+    method.nodeMap[node] = snode
+        
+    method.create(method.guiparent)
+    snode.setPos(method.clickx, method.clicky)
+        
+    global app
+    method.method.editted = True
+    app.tabbedpane.create()
+       
 def createEmptyMethod(program, code=False, empty=False):
     method = None
     if code:
-        method = Code(program.getUnusedName())
+        method = Code(program.getUnusedName("Code_Node"))
     else:
         method = Method(program.getUnusedName())
         
@@ -1493,6 +1549,7 @@ class MethodEditWindow(Toplevel):
         if not self.parent.program.checkNameUsed(self.name):
             oldname = self.method.name
             self.parent.parent.tabbedpane.changeTabName(oldname, self.name)
+            self.parent.parent.renameMethod(self.method, self.name)
             self.method.name = self.name
         
         self.method.inputs = self.inputs
@@ -1556,7 +1613,7 @@ def createToolTip(widget, text):
 
 class TabbedPane(Frame):
     def __init__(self, parent):
-        Frame.__init__(self, parent, background="white") 
+        Frame.__init__(self, parent, background="light sky blue") 
         self.parent = parent
         
         self.tabs = []
@@ -1570,13 +1627,13 @@ class TabbedPane(Frame):
         if not buttonsonly:
             self.frame.destroy()
         
-            self.frame = Frame(self, background="white", relief="sunken", borderwidth=2)
+            self.frame = Frame(self, background="light sky blue")
             self.frame.pack(fill=BOTH, expand=1, padx=2, pady=2)
 
-            self.buttonframe = Frame(self.frame, background="light sky blue", relief="sunken", borderwidth=2)
+            self.buttonframe = Frame(self.frame, background="light sky blue")
             self.buttonframe.pack(anchor=N, fill=X)
             
-        buttframe = Frame(self.buttonframe, background="light sky blue", relief="sunken", borderwidth=2)
+        buttframe = Frame(self.buttonframe, background="light sky blue")
         buttframe.pack(anchor=N, fill=X)
         
         self.bf.destroy()
@@ -1588,8 +1645,8 @@ class TabbedPane(Frame):
             
         for tab in self.tabs:
             name = tab[0]
-            if tab[1].method.editted:
-                name = "*"+name
+            #if tab[1].method.editted:
+            #    name = "*"+name
             if self.active != None and self.active[0] == tab[0]:
                 b = Frame(buttframe, background="white", relief="sunken", borderwidth=2)
                 b.pack(side=LEFT)
@@ -1614,8 +1671,14 @@ class TabbedPane(Frame):
             else:
                 f = Frame(self.methodframe)
                 f.pack(fill=BOTH, expand=1)
-        
+    
+    def closeAll(self):
+        self.active = None
+        self.tabs = []
+        self.create()
+    
     def closeTab(self, name, confirm):
+        confirm = False
         if confirm:
             result = tkMessageBox.askquestion("Close", "Close Without Saving? Are You Sure?", icon='warning')
             if result != 'yes':
@@ -1674,14 +1737,15 @@ class MainWindow(Frame):
         Frame.__init__(self, parent, background="light sky blue")   
          
         self.parent = parent
-        
-        self.buttonFrame = Frame(self, background="light sky blue")
-        self.buttonFrame.pack(fill=X, padx=20)
-        
+              
         self.frame = Frame(self)
         self.frame.pack(fill=BOTH, expand=1)
         
-        self.programFrame = Frame(self.frame, background="white", relief="sunken", borderwidth=2)
+        #ttk.Style().configure("Treeview", background="light sky blue", foreground="light sky blue", fieldbackground="light sky blue")
+        #ttk.Style().configure("Treeview.Row", background="light sky blue", foreground="light sky blue", fieldbackground="light sky blue")
+        #ttk.Style().configure("Treeview.Column", background="light sky blue", foreground="light sky blue", fieldbackground="light sky blue")
+        
+        self.programFrame = Frame(self.frame, background="light sky blue")
         self.programFrame.pack(side=LEFT, fill=Y)
         self.tree = ttk.Treeview(self.programFrame)
         self.tree.pack(fill=BOTH, expand=1)
@@ -1689,18 +1753,14 @@ class MainWindow(Frame):
         self.tree.bind("<Button-3>", self.programRight)
         
         self.progMenu = Menu(self.tree, tearoff=0)
-        self.progMenu.add_command(label="Edit", command=self.progEdit)
+        self.progMenu.add_command(label="Rename", command=self.progEdit)
         self.progMenu.add_command(label="New Method", command=self.progNew)
-        self.progMenu.add_command(label="Delete", command=self.progDelete)
         
         self.methMenu = Menu(self.tree, tearoff=0)
         self.methMenu.add_command(label="Edit", command=self.methEdit)
         self.methMenu.add_command(label="Delete", command=self.methDelete)
+        self.methMenu.add_command(label="New Method", command=self.progNew)
         
-        self.otherMenu = Menu(self.tree, tearoff=0)
-        self.otherMenu.add_command(label="New Program", command=self.otherProg)
-        
-        self.addToolbar()
         self.addTabbedPane()
         self.addConsole()
         
@@ -1717,39 +1777,54 @@ class MainWindow(Frame):
         
         self.pack(fill=BOTH, expand=1)
         
-    def addToolbar(self):
+        # create a toplevel menu
+        menubar = Menu(parent)
+       
+        # create a pulldown menu, and add it to the menu bar
+        filemenu = Menu(menubar, tearoff=0)
+        filemenu.add_command(label="Open", command=self.openProgram)
+        filemenu.add_command(label="Save", command=self.saveProgram)
+        filemenu.add_separator()
+        filemenu.add_command(label="Exit", command=parent.quit)
+        menubar.add_cascade(label="File", menu=filemenu)
         
-        save = Button(self.buttonFrame, text="S", width=2, height=1, command=self.compile)
-        save.pack_propagate(False)
-        save.pack(side=LEFT, padx=1)
+        # create more pulldown menus
+        editmenu = Menu(menubar, tearoff=0)
+        editmenu.add_command(label="Rename Project", command=self.progEdit)
+        editmenu.add_command(label="Method Settings", command=self.tabbedpane.getActive().showMethodEdit)
+        editmenu.add_separator()
+        editmenu.add_command(label="New Input Node", command=lambda app=self: addInputNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New Value Node", command=lambda app=self: addValueNode(app.tabbedpane.getActive()))
+        editmenu.add_separator()
+        editmenu.add_command(label="New Data Settings", command=lambda app=self: addDataSettingsNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New Method Node", command=lambda app=self: addMethodNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New Code Node", command=lambda app=self: addCodeNode(app.tabbedpane.getActive()))
+        editmenu.add_separator()
+        editmenu.add_command(label="New Arithmetic Node", command=lambda app=self: addArithmeticNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New Conditional Selector Node", command=lambda app=self: addConditionalSelectorNode(app.tabbedpane.getActive()))
+        editmenu.add_separator()
+        editmenu.add_command(label="New Output Node", command=lambda app=self: addOutputNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New Print Node", command=lambda app=self: addPrintNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New Scatter Plot Node", command=lambda app=self: addScatterPlotNode(app.tabbedpane.getActive()))
+        editmenu.add_separator()
+        editmenu.add_command(label="New File Read Node", command=lambda app=self: addFileReadNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New File Write Node", command=lambda app=self: addFileWriteNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New CSV Parser Node", command=lambda app=self: addCSVParserNode(app.tabbedpane.getActive()))
+        editmenu.add_separator()
+        menubar.add_cascade(label="Edit", menu=editmenu)
         
-        load = Button(self.buttonFrame, text="L", width=2, height=1, command=self.compile)
-        load.pack_propagate(False)
-        load.pack(side=LEFT, padx=1)
+        runmenu = Menu(menubar, tearoff=0)
+        runmenu.add_command(label="Compile", command=self.compile)
+        runmenu.add_command(label="Run", command=self.run)
+        runmenu.add_separator()
+        runmenu.add_command(label="Show Code", command=self.showCode)
+        menubar.add_cascade(label="Run", menu=runmenu)
         
-        line = Frame(self.buttonFrame, width=2, height=20, background="black", relief="sunken", borderwidth=2)
-        line.pack_propagate(False)
-        line.pack(side=LEFT, padx=5)
+        helpmenu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=helpmenu)
         
-        newProject = Button(self.buttonFrame, text="+p", width=2, height=1, command=self.compile)
-        newProject.pack_propagate(False)
-        newProject.pack(side=LEFT, padx=1)
-        
-        newMethod = Button(self.buttonFrame, text="+m", width=2, height=1, command=self.compile)
-        newMethod.pack_propagate(False)
-        newMethod.pack(side=LEFT, padx=1)
-        
-        line = Frame(self.buttonFrame, width=2, height=20, background="black", relief="sunken", borderwidth=2)
-        line.pack_propagate(False)
-        line.pack(side=LEFT, padx=5)
-        
-        compile = Button(self.buttonFrame, text="C", width=2, height=1, command=self.compile)
-        compile.pack_propagate(False)
-        compile.pack(side=LEFT, padx=1)
-        
-        run = Button(self.buttonFrame, text="R", width=2, height=1, command=self.run)
-        run.pack_propagate(False)
-        run.pack(side=LEFT, padx=1)
+        # display the menu
+        parent.config(menu=menubar)
         
     def compile(self):
         method = self.tabbedpane.getActive().method
@@ -1760,16 +1835,34 @@ class MainWindow(Frame):
         file.close()
         
     def run(self):
+        self.compile()
+        self.output.destroy()
+        self.output = Frame(self.console, background="white")
+        self.output.pack()
         method = self.tabbedpane.getActive().method
         program = self.openMethods[method][1]
         out = subprocess.check_output(["python", program.name+".py"])
-        Label(self.console, text=out).pack()
-        
+        Label(self.output, text=out, background="white").pack()
+    
+    def showCode(self):
+        program = self.programs[0][0]
+        code = program.compile(self.tabbedpane.getActive().method)
+        tkMessageBox.showinfo("Python Code", code)
+    
     def addProgram(self, program):
         root_node = self.tree.insert('', 'end', text=program.name, open=True, tags=["PROGRAM", program.name])
+        self.programs.append((program, root_node))
         for method in program.methods:
             self.addMethod(method, program, root_node)
-        self.programs.append((program, root_node))
+     
+    def renameMethod(self, method, name):
+        id = None
+        for tuple in self.methods:
+            if tuple[0] == method:
+                id = tuple[1]
+                break
+        print id
+        self.tree.item(id, option=None, text=name)
         
     def addMethod(self, method, program, root_node=None):
         if root_node == None:
@@ -1810,33 +1903,56 @@ class MainWindow(Frame):
         item = self.tree.identify_row(event.y)
         
         if item == '':
-            self.otherMenu.post(event.x_root, event.y_root)
+            return
+        
+        vals = self.tree.item(item)
+        if vals["tags"][0] == "PROGRAM":
+            self.menuData = vals["tags"][1:]
+            self.progMenu.post(event.x_root, event.y_root)
         else:
-            vals = self.tree.item(item)
-            if vals["tags"][0] == "PROGRAM":
-                self.menuData = vals["tags"][1:]
-                self.progMenu.post(event.x_root, event.y_root)
-            else:
-                self.menuData = vals["tags"][1:]
-                self.methMenu.post(event.x_root, event.y_root)
+            self.menuData = vals["tags"][1:]
+            self.methMenu.post(event.x_root, event.y_root)
     
-    def otherProg(self):
-        pass
+    def openProgram(self):
+        filename = askopenfilename()
+        if filename == '':
+            return
+        f = open(filename, "r")
+        program = pickle.load(f)
+        f.close()
+        self.tree.delete(self.programs[0][1])
+        self.programs = []
+        self.openMethods = {}
+        self.tabbedpane.closeAll()
+        self.addProgram(program)
+    def saveProgram(self):
+        program = self.programs[0][0]
+        for method in program.methods:
+            if isinstance(method, Code):
+                continue
+            for node in method.nodes:
+                node.editted = False
+        f = open(program.name+".project", "w")
+        pickle.dump(program, f)
+        f.close()
+        self.tabbedpane.create()
     
     def progEdit(self):
-        pass
+        project = self.programs[0][0]
+        var = tkSimpleDialog.askstring("Project Rename", "The previous name was: "+project.name)
+        if var == None or var == '':
+            return
+        project.name = var
+        self.tree.item(self.programs[0][1], option=None, text=var)
+        
     def progNew(self):
-        print self.menuData[0]
-        program = self.programFromName(self.menuData[0])
+        program = self.programs[0][0]
         method = createEmptyMethod(program)
         self.openMethod(method, program)
         self.addMethod(method, program)
-        
-    def progDelete(self):
-        pass
     
     def methEdit(self):
-        program = self.programFromName(self.menuData[1])
+        program = self.programs[0][0]
         method = self.methodFromName(program, self.menuData[0])
         self.openMethod(method, program)
     def methDelete(self):
@@ -1865,6 +1981,8 @@ class MainWindow(Frame):
         self.console = Frame(self.frame, width=150, height=50, background="white", relief="sunken", borderwidth=2)
         self.console.pack_propagate(False)
         self.console.pack(side=LEFT, fill=Y)
+        self.output = Frame(self.console, background="white")
+        self.output.pack()
         
     def openMethod(self, method, program):
         if not method in self.openMethods:

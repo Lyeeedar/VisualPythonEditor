@@ -62,6 +62,9 @@ class Program:
         self.imports = []
     
     def addImport(self, i):
+        for im in self.imports:
+            if im == i:
+                return
         self.imports.append(i)
     
     def addMethod(self, method):
@@ -76,14 +79,19 @@ class Program:
             if name == method.name:
                 return True
         return False            
-    def getUnusedName(self):
-        name = "Empty_Method"
+    def getUnusedName(self, base="Empty_Method"):
+        name = base
         while self.checkNameUsed(name):
             name = name + "0"
         return name
     
     def compile(self, mainMethod):
         code = ""
+        self.imports = []
+        for method in self.methods:
+            imp = method.getImports()
+            for i in imp:
+                self.addImport(i)
         for i in self.imports:
             code += i + "\n"
         code += "\n\n"
@@ -106,6 +114,10 @@ class Code:
         self.code = ""
         self.editted = False
         self.deleted = False
+        self.imp = []
+        
+    def setImports(self, imp):
+        self.imp = imp
         
     def setNumInputs(self, num, baseName="Input"):
         prev = self.inputs
@@ -124,6 +136,9 @@ class Code:
                 self.outputs[i] = prev[i]
             else :
                 self.outputs[i] = baseName+str(i)
+    
+    def getImports(self):
+        return self.imp
     
     def compile(self):
         
@@ -179,13 +194,21 @@ class Method:
     def removeNode(self, node):
         self.nodes.remove(node)
     
-    def updatePriority(self, code, node, priority):
-        
+    def getImports(self):
+        imp = []
         for node in self.nodes:
-            node.releaseUpdateLock()
+            i = node.getImports()
+            if i != None:
+                imp.extend(i)
+        return imp
+    
+    def updatePriority(self, code, n, p):
+        
+        for nn in self.nodes:
+            nn.releaseUpdateLock()
         
         processList = Queue.Queue()
-        processList.put_nowait((node, priority))
+        processList.put_nowait((n, p))
         
         while not processList.empty():
             (node, priority) = processList.get_nowait()
@@ -204,7 +227,7 @@ class Method:
                     continue
                 linked = tuple[0]
 
-                if (not linked.updating) and priority+1 > linked.priority:
+                if (not linked.updating) and (priority+1 > linked.priority):
                     processList.put_nowait((linked, priority+1))
                     linked.updating = True
     
@@ -275,6 +298,9 @@ class Node:
         self.name = name
         self.links = {}
         self.setNumLinks(1, name)
+        
+        self.x = 0
+        self.y = 0
     
     def reset(self):
         self.added = False
@@ -306,6 +332,9 @@ class Node:
     def writeCode(self, data, code):
         data["Code"].append((self.priority, code, self))
         self.processed = True
+    
+    def getImports(self):
+        pass
     
     def getMappedName(self, node, name, nameMap):
         if node in nameMap and name in nameMap[node]:
@@ -455,14 +484,14 @@ class ArithmeticNode(Node):
         elif self.name == "Divide":
             operator = "/"
             
-        for i in range(num-2):
+        for i in range(num-1):
             code += "("
         for i in range(num):
             link = self.links["Input"+str(i)]
             if i > 0:
                 code += " " + operator + " "
             code += self.getMappedName(link[0], link[1], data["NameMap"]) + "[i]"
-            if num > 1 and i > 0 and i < num-1:
+            if num > 1 and i > 0 and i < num:
                 code += ")"
         code += " for i in range(max("
         for i in range(num):
@@ -573,9 +602,28 @@ class CSVParserNode(Node):
         self.quotechar = '"'
         self.datatype = "float"
     
+    def getImports(self):
+        return ["import csv", "import StringIO"]
+    
     def process(self, data):
-        code = "reader = csv.reader(" + self.getMappedName(self.links["CSV"][0], self.links["CSV"][1], data["NameMap"]) + "[0].splitlines(), delimiter='" + self.delimiter + "', quotechar='" + self.quotechar + "')\n\t\t"
+        code = "reader = csv.reader(StringIO.StringIO(" + self.getMappedName(self.links["CSV"][0], self.links["CSV"][1], data["NameMap"]) + "), delimiter='" + self.delimiter + "', quotechar='" + self.quotechar + "')\n\t\t"
         code += self.getMappedName(self, self.outputs[0], data["NameMap"]) + " = Data([["+self.datatype+"(element) for element in row] for row in reader])"
+        self.writeCode(data, code)
+        
+class ScatterPlotNode(TerminalNode):
+    def __init__(self):
+        Node.__init__(self, "Scatter Plot")
+        
+        self.links = {}
+        self.links["X"] = ()
+        self.links["Y"] = ()
+    
+    def getImports(self):
+        return ["import pylab"]
+    
+    def process(self, data):
+        code = "pylab.scatter(" + self.getMappedName(self.links["X"][0], self.links["X"][1], data["NameMap"]) + ", " + self.getMappedName(self.links["Y"][0], self.links["Y"][1], data["NameMap"]) + ")\n\t\t"
+        code += "pylab.show()"
         self.writeCode(data, code)
 
 class DataSettingsNode(Node):
