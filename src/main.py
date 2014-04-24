@@ -205,7 +205,7 @@ class GUIArgumentEditFrame(Toplevel):
         Grid.columnconfigure(self.frame, 0, weight=1)
         Grid.columnconfigure(self.frame, 1, weight=1)
         
-        Label(self.frame, text="Method Input Node").grid(row=0, column=0, columnspan=2, sticky=N+S+E+W)
+        Label(self.frame, text="NodeMethod Input Node").grid(row=0, column=0, columnspan=2, sticky=N+S+E+W)
         
         self.inputs = []
         i = 1
@@ -445,189 +445,9 @@ class GUIMethodNode(GUINode):
             if not key in self.node.method.outputs:
                 self.parent.deleteLinks(self, key)
                 self.node.outputs.remove(key)
-                
-class GUICodeEditFrame(Toplevel):
-    def __init__(self, parent, method, node, program):
-        Toplevel.__init__(self, parent, background="white")   
-        
-        self.node = node
-        self.program = program
-        self.parent = parent
-        self.method = method
-        self.inputs = method.inputs
-        self.outputs = method.outputs
-        self.name = method.name
-        self.code = method.code
-        
-        self.frame = Frame(self)
-        self.create()
-                
-    def create(self):
-        
-        self.frame.destroy()
-        self.frame = Frame(self)
-        
-        Grid.columnconfigure(self.frame, 0, weight=2)
-        Grid.columnconfigure(self.frame, 1, weight=1)
-        Grid.columnconfigure(self.frame, 2, weight=2)
-        Grid.columnconfigure(self.frame, 3, weight=1)
-        
-        Label(self.frame, text="Method Name:").grid(row=0, column=0, columnspan=4, sticky=N+S+E+W)
-        self.methodname = Entry(self.frame)
-        self.methodname.grid(row=1, column=0, columnspan=4, sticky=N+S+E+W)
-        self.methodname.insert(0, self.name)
-        Label(self.frame, text="Inputs:").grid(row=2, column=0, columnspan=2, sticky=N+S+E+W)
-        Label(self.frame, text="Outputs:").grid(row=2, column=2, columnspan=2, sticky=N+S+E+W)
-        
-        self.methodinputs = []
-        i=3
-        for input in self.inputs:
-            mi = Entry(self.frame)
-            mi.grid(row=i, column=0, columnspan=1, sticky=N+S+E+W)
-            self.methodinputs.append(mi)
-            mi.insert(0, input)
-            
-            b = Button(self.frame, text="Remove", command=lambda input=input: self.removeInput(input))
-            b.grid(row=i, column=1, columnspan=1, sticky=N+S+E+W)
-            
-            i+=1
-            
-        b = Button(self.frame, text="Add", command=lambda: self.addInput())
-        b.grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
-        
-        max = i+1
-        
-        self.methodoutputs = []
-        i=3
-        for output in self.outputs:
-            mi = Entry(self.frame)
-            mi.grid(row=i, column=2, columnspan=1, sticky=N+S+E+W)
-            self.methodoutputs.append(mi)
-            mi.insert(0, output)
-            
-            b = Button(self.frame, text="Remove", command=lambda output=output: self.removeOutput(output))
-            b.grid(row=i, column=3, columnspan=1, sticky=N+S+E+W)
-            
-            i+=1
-        
-        b = Button(self.frame, text="Add", command=lambda: self.addOutput())
-        b.grid(row=i, column=2, columnspan=2, sticky=N+S+E+W)
-        
-        if i+1 > max:
-            max = i+1
-            
-        i = max
-        
-        argument = "def " + self.name + "(self"
-        for arg in self.inputs:
-            argument += ", " + arg
-        argument += "):"
-        
-        Label(self.frame, text=argument).grid(row=i, column=0, columnspan=4, stick=N+S+E+W)
-        
-        i+=1
-        
-        self.text = Text(self.frame)
-        self.text.grid(row=i, rowspan=10, column=0, columnspan=4, sticky=N+S+E+W)
-        self.text.insert(INSERT, self.code)
-        
-        i+= 10
-        
-        output = "return ("
-        first = True
-        for out in self.outputs:
-            if first:
-                first = False
-            else:
-                output += ", "
-            output += out
-        output += ")"
-        
-        Label(self.frame, text=output).grid(row=i, column=0, columnspan=4, stick=N+S+E+W)
-        
-        i+=1
-        
-        b = Button(self.frame, text="Apply", command=self.apply)
-        b.grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
-        
-        b = Button(self.frame, text="Cancel", command=self.cancel)
-        b.grid(row=i, column=2, columnspan=2, sticky=N+S+E+W)
-        
-        self.frame.pack(fill=BOTH, expand=1)
-    
-    def addInput(self):
-        self.read()
-        name = "Input0"
-        while name in self.inputs:
-            name = name+"0"
-        self.inputs.append(name)
-        self.create()
-        
-    def addOutput(self):
-        self.read()
-        name = "Output0"
-        while name in self.outputs:
-            name = name+"0"
-        self.outputs.append(name)
-        self.create()
-    
-    def removeInput(self, input):
-        self.read()
-        self.inputs.remove(input)
-        self.create()
-        
-    def removeOutput(self, output):
-        self.read()
-        self.outputs.remove(output)
-        self.create()
-    
-    def gen_valid_identifier(self, seq):
-        # get an iterator
-        itr = iter(seq)
-        # pull characters until we get a legal one for first in identifer
-        for ch in itr:
-            if ch == '_' or ch.isalpha():
-                yield ch
-                break
-        # pull remaining characters and yield legal ones for identifier
-        for ch in itr:
-            if ch == '_' or ch.isalpha() or ch.isdigit():
-                yield ch
-    
-    def sanitize_identifier(self, name):
-        return ''.join(self.gen_valid_identifier(name))
-
-    def read(self):
-        self.inputs = []
-        for mi in self.methodinputs:
-            self.inputs.append(mi.get())
-        self.outputs = []
-        for mo in self.methodoutputs:
-            self.outputs.append(mo.get())
-        self.name = self.methodname.get()
-        self.name = self.sanitize_identifier(self.name)
-        self.code = self.text.get(1.0,END)
-            
-    def apply(self):
-        self.read()
-        
-        if not self.program.checkNameUsed(self.name):
-            oldname = self.method.name
-            self.parent.parent.tabbedpane.changeTabName(oldname, self.name)
-            self.method.name = self.name
-        
-        self.method.inputs = self.inputs
-        self.method.outputs = self.outputs
-        self.method.code = self.code
-        self.node.verify()
-        self.destroy()
-        
-    def cancel(self):
-        self.destroy()
-                      
+                                
 class GUICodeNode(GUIMethodNode):
-    def edit(self):
-        GUICodeEditFrame(self.frame, self.node.method, self, self.parent.program)
+    pass
                 
 class GUIArithmeticEditFrame(Toplevel):
     def __init__(self, parent, method, node):
@@ -770,7 +590,7 @@ class GUIPrintNode(GUIOutputNode):
     def verify(self):
         pass
 
-class GUIMethodChooserFrame(Toplevel):
+class GUINodeMethodChooserFrame(Toplevel):
     def __init__(self, guiparent, parent, program):
         Toplevel.__init__(self, guiparent, background="white")
         self.geometry("360x240+300+300") 
@@ -787,7 +607,7 @@ class GUIMethodChooserFrame(Toplevel):
         Grid.columnconfigure(self.frame, 1, weight=1)
         
         i=0
-        Label(self.frame, text="Method Selection").grid(row=i, columnspan=2, sticky=N+S+E+W)
+        Label(self.frame, text="NodeMethod Selection").grid(row=i, columnspan=2, sticky=N+S+E+W)
         
         i+=1
         
@@ -804,7 +624,7 @@ class GUIMethodChooserFrame(Toplevel):
         
         first = True
         for method in self.program.methods:
-            if isinstance(method, Code):
+            if isinstance(method, CodeMethod):
                 continue
             b = Radiobutton(frame, text=method.name,
                             variable=self.v, value=method.name,
@@ -818,7 +638,6 @@ class GUIMethodChooserFrame(Toplevel):
         Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
         
     def apply(self):
-        print "apply"
         method = None
         for m in self.program.methods:
             if m.name == self.v.get():
@@ -840,7 +659,77 @@ class GUIMethodChooserFrame(Toplevel):
         self.destroy()
                     
     def cancel(self):
-        print "destory"
+        self.destroy()
+        
+class GUICodeMethodChooserFrame(Toplevel):
+    def __init__(self, guiparent, parent, program):
+        Toplevel.__init__(self, guiparent, background="white")
+        self.geometry("360x240+300+300") 
+         
+        self.parent = parent
+        self.program = program
+        
+        self.frame = Frame(self)
+        self.create()
+        self.frame.pack(fill=BOTH, expand=1)
+               
+    def create(self):
+        Grid.columnconfigure(self.frame, 0, weight=1)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        
+        i=0
+        Label(self.frame, text="CodeMethod Selection").grid(row=i, columnspan=2, sticky=N+S+E+W)
+        
+        i+=1
+        
+        self.v = StringVar()
+        
+        self.canvas = Canvas(self.frame)
+        self.canvas.grid(row=i, rowspan=10, columnspan=2)
+        
+        i+=10
+        
+        frame = Frame(self.canvas)
+        self.canvas.create_window(self.canvas.winfo_width()/2, 0, anchor=NW, window=frame)
+        frame.pack()
+        
+        first = True
+        for method in self.program.methods:
+            if isinstance(method, NodeMethod):
+                continue
+            b = Radiobutton(frame, text=method.name,
+                            variable=self.v, value=method.name,
+                            indicatoron=0)
+            b.pack()
+            if first:
+                self.v.set(method.name)
+                first = False
+            
+        Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
+        Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
+        
+    def apply(self):
+        method = None
+        for m in self.program.methods:
+            if m.name == self.v.get():
+                method = m
+                break
+             
+        node = MethodNode(method)
+        self.parent.method.addNode(node)
+        
+        snode = GUIMethodNode(self.parent, node)
+        self.parent.nodes.append(snode)
+        self.parent.nodeMap[node] = snode
+        
+        self.parent.create(self.parent.guiparent)
+        snode.setPos(self.parent.clickx, self.parent.clicky)
+        
+        self.parent.method.editted = True
+        
+        self.destroy()
+                    
+    def cancel(self):
         self.destroy()
 
 class GUICSVParserEditFrame(Toplevel):
@@ -968,6 +857,12 @@ class GUIDataSettingsEditFrame(Toplevel):
                             variable=self.orientation, value=val)
             b.grid(row=i, column=0, columnspan=2, sticky=W)
             i+=1
+            
+        Label(self.frame, text="Index").grid(row=i, column=0, sticky=N+S+E+W)
+        self.index = Entry(self.frame)
+        self.index.grid(row=i, column=1, sticky=N+S+E+W)
+        self.index.insert(0, str(self.node.node.index))
+        i+=1
         
         Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
         Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
@@ -975,6 +870,7 @@ class GUIDataSettingsEditFrame(Toplevel):
     def apply(self):
         self.node.node.iteration = self.iteration.get()
         self.node.node.orientation = self.orientation.get()
+        self.node.node.index = int(self.index.get())
         
         self.node.create()
         self.destroy()
@@ -1062,10 +958,10 @@ class GUIMethod:
         self.aMenu.add_command(label="New Input Node", command=lambda method=self: addInputNode(method))
         self.aMenu.add_command(label="New Value Node", command=lambda method=self: addValueNode(method))
         self.aMenu.add_separator()
-        self.aMenu.add_command(label="New Data Settings", command=lambda method=self: addDataSettingsNode(method))
-        self.aMenu.add_command(label="New Method Node", command=lambda method=self: addMethodNode(method))
-        self.aMenu.add_command(label="New Code Node", command=lambda method=self: addCodeNode(method))
+        self.aMenu.add_command(label="New NodeMethod Node", command=lambda method=self: addMethodNode(method))
+        self.aMenu.add_command(label="New CodeMethod Node", command=lambda method=self: addCodeNode(method))
         self.aMenu.add_separator()
+        self.aMenu.add_command(label="New Data Settings", command=lambda method=self: addDataSettingsNode(method))
         self.aMenu.add_command(label="New Arithmetic Node", command=lambda method=self: addArithmeticNode(method))
         self.aMenu.add_command(label="New Conditional Selector Node", command=lambda method=self: addConditionalSelectorNode(method))
         self.aMenu.add_separator()
@@ -1077,7 +973,7 @@ class GUIMethod:
         self.aMenu.add_command(label="New File Write Node", command=lambda method=self: addFileWriteNode(method))
         self.aMenu.add_command(label="New CSV Parser Node", command=lambda method=self: addCSVParserNode(method))
         self.aMenu.add_separator()
-        self.aMenu.add_command(label="Edit Method", command=self.showMethodEdit)
+        self.aMenu.add_command(label="Edit NodeMethod", command=self.showMethodEdit)
         
         for node in self.nodes:
             node.create(self.canvas)
@@ -1204,24 +1100,224 @@ class GUIMethod:
             node.verify()
             node.create()
 
+class GUICodeMethod:
+    def __init__(self, parent, method, program):
+        self.parent = parent
+        
+        self.program = program
+        self.method = method
+        
+        self.frame = Frame(parent)
+        self.giuparent = None
+        
+        self.inputs = method.inputs
+        self.outputs = method.outputs
+        self.imp = method.imp
+        self.name = method.name
+        self.code = method.code
+        
+    def create(self, guiparent=None):
+        
+        if guiparent == None:
+            guiparent = self.giuparent
+        self.giuparent = guiparent
+        
+        self.frame.destroy()
+        self.frame = Frame(guiparent)
+        
+        Grid.columnconfigure(self.frame, 0, weight=2)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        Grid.columnconfigure(self.frame, 2, weight=2)
+        Grid.columnconfigure(self.frame, 3, weight=1)
+        
+        Label(self.frame, text="CodeMethod Name:").grid(row=0, column=0, columnspan=4, sticky=N+S+E+W)
+        self.methodname = Entry(self.frame)
+        self.methodname.grid(row=1, column=0, columnspan=4, sticky=N+S+E+W)
+        self.methodname.insert(0, self.name)
+        Label(self.frame, text="Inputs:").grid(row=2, column=0, columnspan=2, sticky=N+S+E+W)
+        Label(self.frame, text="Outputs:").grid(row=2, column=2, columnspan=2, sticky=N+S+E+W)
+        
+        self.methodinputs = []
+        i=3
+        for input in self.inputs:
+            mi = Entry(self.frame)
+            mi.grid(row=i, column=0, columnspan=1, sticky=N+S+E+W)
+            self.methodinputs.append(mi)
+            mi.insert(0, input)
+            
+            b = Button(self.frame, text="Remove", command=lambda input=input: self.removeInput(input))
+            b.grid(row=i, column=1, columnspan=1, sticky=N+S+E+W)
+            
+            i+=1
+            
+        b = Button(self.frame, text="Add", command=lambda: self.addInput())
+        b.grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        max = i+1
+        
+        self.methodoutputs = []
+        i=3
+        for output in self.outputs:
+            mi = Entry(self.frame)
+            mi.grid(row=i, column=2, columnspan=1, sticky=N+S+E+W)
+            self.methodoutputs.append(mi)
+            mi.insert(0, output)
+            
+            b = Button(self.frame, text="Remove", command=lambda output=output: self.removeOutput(output))
+            b.grid(row=i, column=3, columnspan=1, sticky=N+S+E+W)
+            
+            i+=1
+        
+        b = Button(self.frame, text="Add", command=lambda: self.addOutput())
+        b.grid(row=i, column=2, columnspan=2, sticky=N+S+E+W)
+        
+        if i+1 > max:
+            max = i+1
+            
+        i = max
+        
+        b = Label(self.frame, text="Imports")
+        b.grid(row=i, column=0, columnspan=4, sticky=N+S+E+W)
+        
+        i+=1
+        
+        self.methodimps = []
+        for imp in self.imp:
+            mi = Entry(self.frame)
+            mi.grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
+            self.methodimps.append(mi)
+            mi.insert(0, imp)
+            
+            b = Button(self.frame, text="Remove", command=lambda imp=imp: self.removeImport(imp))
+            b.grid(row=i, column=2, columnspan=2, sticky=N+S+E+W)
+            
+            i+=1
+            
+        b = Button(self.frame, text="Add Import", command=lambda: self.addImport())
+        b.grid(row=i, column=0, columnspan=4, sticky=N+S+E+W)
+        
+        i+=1
+        
+        argument = "def " + self.name + "(self"
+        for arg in self.method.inputs:
+            argument += ", " + arg
+        argument += "):"
+        
+        Label(self.frame, text=argument).grid(row=i, column=0, columnspan=4, stick=N+S+E+W)
+        
+        i+=1
+        
+        self.text = Text(self.frame)
+        self.text.grid(row=i, rowspan=10, column=0, columnspan=4, sticky=N+S+E+W)
+        self.text.insert(INSERT, self.code)
+        
+        i+= 10
+        
+        output = "return ("
+        first = True
+        for out in self.outputs:
+            if first:
+                first = False
+            else:
+                output += ", "
+            output += out
+        output += ")"
+        
+        Label(self.frame, text=output).grid(row=i, column=0, columnspan=4, stick=N+S+E+W)
+        
+        i+=1
+        
+        b = Button(self.frame, text="Apply", command=self.apply)
+        b.grid(row=i, column=0, columnspan=4, sticky=N+S+E+W)
+
+        self.frame.pack(fill=BOTH, expand=1)
+    
+    def addImport(self):
+        self.read()
+        self.imp.append("")
+        self.create()
+        
+    def removeImport(self, imp):
+        self.read()
+        self.imp.remove(imp)
+        self.create()
+    
+    def addInput(self):
+        self.read()
+        name = "Input0"
+        while name in self.inputs:
+            name = name+"0"
+        self.inputs.append(name)
+        self.create()
+        
+    def addOutput(self):
+        self.read()
+        name = "Output0"
+        while name in self.outputs:
+            name = name+"0"
+        self.outputs.append(name)
+        self.create()
+    
+    def removeInput(self, input):
+        self.read()
+        self.inputs.remove(input)
+        self.create()
+        
+    def removeOutput(self, output):
+        self.read()
+        self.outputs.remove(output)
+        self.create()
+    
+    def gen_valid_identifier(self, seq):
+        # get an iterator
+        itr = iter(seq)
+        # pull characters until we get a legal one for first in identifer
+        for ch in itr:
+            if ch == '_' or ch.isalpha():
+                yield ch
+                break
+        # pull remaining characters and yield legal ones for identifier
+        for ch in itr:
+            if ch == '_' or ch.isalpha() or ch.isdigit():
+                yield ch
+    
+    def sanitize_identifier(self, name):
+        return ''.join(self.gen_valid_identifier(name))
+
+    def read(self):
+        self.inputs = []
+        for mi in self.methodinputs:
+            self.inputs.append(mi.get())
+        self.outputs = []
+        for mo in self.methodoutputs:
+            self.outputs.append(mo.get())
+        self.imp = []
+        for imp in self.methodimps:
+            self.imp.append(imp.get())
+        self.name = self.methodname.get()
+        self.name = self.sanitize_identifier(self.name)
+        self.code = self.text.get(1.0,END)
+            
+    def apply(self):
+        self.read()
+        
+        if not self.program.checkNameUsed(self.name):
+            oldname = self.method.name
+            self.parent.tabbedpane.changeTabName(oldname, self.name)
+            self.method.name = self.name
+        
+        self.method.inputs = self.inputs
+        self.method.outputs = self.outputs
+        self.method.code = self.code
+        self.create()
+
 def addMethodNode(method):
-    GUIMethodChooserFrame(method.canvas, method, method.program)
+    GUINodeMethodChooserFrame(method.canvas, method, method.program)
     method.method.editted = True
         
 def addCodeNode(method):
-    node = CodeNode(createEmptyMethod(method.program, code=True))
-    method.method.addNode(node)
-        
-    snode = GUICodeNode(method, node)
-    method.nodes.append(snode)
-    method.nodeMap[node] = snode
-       
-    method.create(method.guiparent)
-    snode.setPos(method.clickx, method.clicky)
-       
-    global app
+    GUICodeMethodChooserFrame(method.canvas, method, method.program)
     method.method.editted = True
-    app.tabbedpane.create()
     
 def addDataSettingsNode(method):
     node = DataSettingsNode()
@@ -1393,9 +1489,9 @@ def addValueNode(method):
 def createEmptyMethod(program, code=False, empty=False):
     method = None
     if code:
-        method = Code(program.getUnusedName("Code_Node"))
+        method = CodeMethod(program.getUnusedName("Code_Node"))
     else:
-        method = Method(program.getUnusedName())
+        method = NodeMethod(program.getUnusedName())
         
         if empty:
             method.setNumInputs(0)
@@ -1439,7 +1535,7 @@ class MethodEditWindow(Toplevel):
         Grid.columnconfigure(self.frame, 2, weight=2)
         Grid.columnconfigure(self.frame, 3, weight=1)
         
-        Label(self.frame, text="Method Name:").grid(row=0, column=0, columnspan=4, sticky=N+S+E+W)
+        Label(self.frame, text="NodeMethod Name:").grid(row=0, column=0, columnspan=4, sticky=N+S+E+W)
         self.methodname = Entry(self.frame)
         self.methodname.grid(row=1, column=0, columnspan=4, sticky=N+S+E+W)
         self.methodname.insert(0, self.name)
@@ -1732,6 +1828,50 @@ class TabbedPane(Frame):
             return None
         return self.active[1]
 
+class GUIMethodImporter(Toplevel):
+    def __init__(self, guiparent, cprogram, nprogram):
+        Toplevel.__init__(self, guiparent, background="white")
+        self.geometry("360x240+300+300") 
+        
+        self.parent = guiparent
+        self.cprogram = cprogram
+        self.nprogram = nprogram
+        self.selected = []
+        
+        self.frame = Frame(self)
+        self.create()
+        self.frame.pack(fill=BOTH, expand=1)
+               
+    def create(self):
+        Grid.columnconfigure(self.frame, 0, weight=1)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        
+        i=0
+        Label(self.frame, text="Method Import").grid(row=i, columnspan=2, sticky=N+S+E+W)
+        
+        i+=1
+        
+        for method in self.nprogram.methods:
+            var = IntVar()
+            c = Checkbutton(self.frame, text=method.name, variable=var)
+            c.grid(row=i, columnspan=2, sticky=N+S+E+W)
+            i+=1
+            self.selected.append((var, method))
+            
+        Button(self.frame, text="Apply", command=self.apply).grid(row=i, column=0, sticky=N+S+E+W)
+        Button(self.frame, text="Cancel", command=self.cancel).grid(row=i, column=1, sticky=N+S+E+W)
+        
+    def apply(self):
+        for pair in self.selected:
+            if pair[0].get() == 1:
+                self.cprogram.addMethod(pair[1])
+                self.parent.addMethod(pair[1], self.cprogram)
+        
+        self.destroy()
+                    
+    def cancel(self):
+        self.destroy()
+
 class MainWindow(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent, background="light sky blue")   
@@ -1751,15 +1891,22 @@ class MainWindow(Frame):
         self.tree.pack(fill=BOTH, expand=1)
         
         self.tree.bind("<Button-3>", self.programRight)
+        self.tree.bind("<Double-1>", self.programDouble)
         
         self.progMenu = Menu(self.tree, tearoff=0)
         self.progMenu.add_command(label="Rename", command=self.progEdit)
-        self.progMenu.add_command(label="New Method", command=self.progNew)
+        self.progMenu.add_command(label="New NodeMethod", command=self.progNodeNew)
+        self.progMenu.add_command(label="New CodeMethod", command=self.progCodeNew)
         
         self.methMenu = Menu(self.tree, tearoff=0)
         self.methMenu.add_command(label="Edit", command=self.methEdit)
         self.methMenu.add_command(label="Delete", command=self.methDelete)
-        self.methMenu.add_command(label="New Method", command=self.progNew)
+        self.methMenu.add_command(label="New NodeMethod", command=self.progNodeNew)
+        
+        self.codeMenu = Menu(self.tree, tearoff=0)
+        self.codeMenu.add_command(label="Edit", command=self.methEdit)
+        self.codeMenu.add_command(label="Delete", command=self.methDelete)
+        self.codeMenu.add_command(label="New CodeMethod", command=self.progCodeNew)
         
         self.addTabbedPane()
         self.addConsole()
@@ -1767,7 +1914,7 @@ class MainWindow(Frame):
         self.programs = []
         self.methods = []
         
-        program = Program("TestProgram")
+        program = Program("NewProject")
         method = createEmptyMethod(program, empty=True)
         
         self.addProgram(program)
@@ -1785,21 +1932,22 @@ class MainWindow(Frame):
         filemenu.add_command(label="Open", command=self.openProgram)
         filemenu.add_command(label="Save", command=self.saveProgram)
         filemenu.add_separator()
+        filemenu.add_command(label="Import Methods", command=self.importMethod)
+        filemenu.add_separator()
         filemenu.add_command(label="Exit", command=parent.quit)
         menubar.add_cascade(label="File", menu=filemenu)
         
         # create more pulldown menus
         editmenu = Menu(menubar, tearoff=0)
         editmenu.add_command(label="Rename Project", command=self.progEdit)
-        editmenu.add_command(label="Method Settings", command=self.tabbedpane.getActive().showMethodEdit)
         editmenu.add_separator()
         editmenu.add_command(label="New Input Node", command=lambda app=self: addInputNode(app.tabbedpane.getActive()))
         editmenu.add_command(label="New Value Node", command=lambda app=self: addValueNode(app.tabbedpane.getActive()))
         editmenu.add_separator()
-        editmenu.add_command(label="New Data Settings", command=lambda app=self: addDataSettingsNode(app.tabbedpane.getActive()))
-        editmenu.add_command(label="New Method Node", command=lambda app=self: addMethodNode(app.tabbedpane.getActive()))
-        editmenu.add_command(label="New Code Node", command=lambda app=self: addCodeNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New NodeMethod Node", command=lambda app=self: addMethodNode(app.tabbedpane.getActive()))
+        editmenu.add_command(label="New CodeMethod Node", command=lambda app=self: addCodeNode(app.tabbedpane.getActive()))
         editmenu.add_separator()
+        editmenu.add_command(label="New Data Settings", command=lambda app=self: addDataSettingsNode(app.tabbedpane.getActive()))
         editmenu.add_command(label="New Arithmetic Node", command=lambda app=self: addArithmeticNode(app.tabbedpane.getActive()))
         editmenu.add_command(label="New Conditional Selector Node", command=lambda app=self: addConditionalSelectorNode(app.tabbedpane.getActive()))
         editmenu.add_separator()
@@ -1817,11 +1965,8 @@ class MainWindow(Frame):
         runmenu.add_command(label="Compile", command=self.compile)
         runmenu.add_command(label="Run", command=self.run)
         runmenu.add_separator()
-        runmenu.add_command(label="Show Code", command=self.showCode)
+        runmenu.add_command(label="Show Compiled Code", command=self.showCode)
         menubar.add_cascade(label="Run", menu=runmenu)
-        
-        helpmenu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Help", menu=helpmenu)
         
         # display the menu
         parent.config(menu=menubar)
@@ -1847,13 +1992,26 @@ class MainWindow(Frame):
     def showCode(self):
         program = self.programs[0][0]
         code = program.compile(self.tabbedpane.getActive().method)
-        tkMessageBox.showinfo("Python Code", code)
+        tkMessageBox.showinfo("Python CodeMethod", code)
+    
+    def importMethod(self):
+        filename = askopenfilename()
+        if filename == '':
+            return
+        f = open(filename, "r")
+        program = pickle.load(f)
+        f.close()
+        
+        GUIMethodImporter(self, self.programs[0][0], program)
     
     def addProgram(self, program):
         root_node = self.tree.insert('', 'end', text=program.name, open=True, tags=["PROGRAM", program.name])
-        self.programs.append((program, root_node))
+        nodemethod_node = self.tree.insert(root_node, 'end', text='Node Methods', open=True, tags=["NODEMETHODNODE", program.name])
+        codemethod_node = self.tree.insert(root_node, 'end', text='Code Methods', open=True, tags=["CODEMETHODNODE", program.name])
+        
+        self.programs.append((program, root_node, nodemethod_node, codemethod_node))
         for method in program.methods:
-            self.addMethod(method, program, root_node)
+            self.addMethod(method, program)
      
     def renameMethod(self, method, name):
         id = None
@@ -1864,17 +2022,21 @@ class MainWindow(Frame):
         print id
         self.tree.item(id, option=None, text=name)
         
-    def addMethod(self, method, program, root_node=None):
-        if root_node == None:
-            for tuple in self.programs:
-                if tuple[0] == program:
-                    root_node = tuple[1]
-                    break
-        id = self.tree.insert(root_node, 'end', text=method.name, open=False, tags=["METHOD", method.name, program.name])
+    def addMethod(self, method, program):
+        for tuple in self.programs:
+            if tuple[0] == program:
+                if isinstance(method, NodeMethod):
+                    root_node = tuple[2]
+                else:
+                    root_node = tuple[3]
+                break
+        name = None
+        if isinstance(method, NodeMethod):
+            name = "NODEMETHOD"
+        else:
+            name = "CODEMETHOD"
+        id = self.tree.insert(root_node, 'end', text=method.name, open=False, tags=[name, method.name, program.name])
         self.methods.append((method, id))
-        
-        self.tree.bind("<Double-1>", self.programDouble)
-        self.tree.bind("<Button-3>", self.programRight)
         
     def programFromName(self, name):
         for tuple in self.programs:
@@ -1895,6 +2057,10 @@ class MainWindow(Frame):
         vals = self.tree.item(item)
         if vals["tags"][0] == "PROGRAM":
             return
+        elif vals["tags"][0] == "NODEMETHODNODE":
+            return
+        elif vals["tags"][0] == "CODEMETHODNODE":
+            return
         program = self.programFromName(vals["tags"][2])
         method = self.methodFromName(program, vals["tags"][1])
         self.openMethod(method, program)
@@ -1909,9 +2075,12 @@ class MainWindow(Frame):
         if vals["tags"][0] == "PROGRAM":
             self.menuData = vals["tags"][1:]
             self.progMenu.post(event.x_root, event.y_root)
-        else:
+        elif vals["tags"][0] == "NODEMETHODNODE" or vals["tags"][0] == "NODEMETHOD":
             self.menuData = vals["tags"][1:]
             self.methMenu.post(event.x_root, event.y_root)
+        elif vals["tags"][0] == "CODEMETHODNODE" or vals["tags"][0] == "CODEMETHOD":
+            self.codeData = vals["tags"][1:]
+            self.codeMenu.post(event.x_root, event.y_root)
     
     def openProgram(self):
         filename = askopenfilename()
@@ -1928,7 +2097,7 @@ class MainWindow(Frame):
     def saveProgram(self):
         program = self.programs[0][0]
         for method in program.methods:
-            if isinstance(method, Code):
+            if isinstance(method, CodeMethod):
                 continue
             for node in method.nodes:
                 node.editted = False
@@ -1945,9 +2114,15 @@ class MainWindow(Frame):
         project.name = var
         self.tree.item(self.programs[0][1], option=None, text=var)
         
-    def progNew(self):
+    def progNodeNew(self):
         program = self.programs[0][0]
         method = createEmptyMethod(program)
+        self.openMethod(method, program)
+        self.addMethod(method, program)
+        
+    def progCodeNew(self):
+        program = self.programs[0][0]
+        method = createEmptyMethod(program, code=True)
         self.openMethod(method, program)
         self.addMethod(method, program)
     
@@ -1986,7 +2161,11 @@ class MainWindow(Frame):
         
     def openMethod(self, method, program):
         if not method in self.openMethods:
-            guimethod = GUIMethod(self, method, program)
+            guimethod = None
+            if isinstance(method, NodeMethod):
+                guimethod = GUIMethod(self, method, program)
+            else:
+                guimethod = GUICodeMethod(self, method, program)
             self.tabbedpane.addTab(method.name, guimethod)
             self.openMethods[method] = (guimethod, program)
         self.tabbedpane.setActiveTab(method.name)

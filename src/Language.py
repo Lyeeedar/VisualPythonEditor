@@ -9,15 +9,20 @@ import copy
 
 dataClass = \
 """class Data:
-    def __init__(self, values, data=None, iteration="Single", orientation="Row"):
+    def __init__(self, values, data=None, iteration="Single", orientation="Row", index=0):
         if not hasattr(values, '__iter__'):
             values = [values]
+        for i in range(len(values)):
+            if not hasattr(values[i], '__iter__'):
+                values[i] = [values[i]]
         self.values = values
         self.iteration = iteration
         self.orientation = orientation
+        self.index = index
         if data != None:
             self.iteration = data.iteration
             self.orientation = data.orientation
+            self.index = data.index
 
     def wrapIndex(self, index):
         if self.iteration == "Single":
@@ -30,9 +35,9 @@ dataClass = \
     def __getitem__(self, key):
         key = self.wrapIndex(key)
         if self.orientation == "Row":
-            return self.values[key]
+            return self.values[key][self.index]
         elif self.orientation == "Column":
-            return self.values[0][key]
+            return self.values[self.index][key]
 
     def __setitem__(self, key, value):
         pass
@@ -45,12 +50,8 @@ dataClass = \
         
     def __str__(self):
         string = ""
-        if self.orientation == "Row":
-            for value in self.values:
-                string += str(value) + "\\n"
-        elif self.orientation == "Column":
-            for value in self.values[0]:
-                string += str(value) + "\\n"
+        for i in range(len(self)):
+            string += str(self[i]) + "\\n"
         return string
         
 """
@@ -104,7 +105,7 @@ class Program:
         code += "program." + mainMethod.name + "()"
         return code
 
-class Code:
+class CodeMethod:
     def __init__(self, name):
         self.name = name
         self.inputs = []
@@ -159,7 +160,7 @@ class Code:
         
         return argument + self.code.replace("\n", "\n\t\t") + output
                 
-class Method:
+class NodeMethod:
     def __init__(self, name):
         self.name = name
         self.inputs = []
@@ -242,7 +243,7 @@ class Method:
         data["NameMap"]["Used"] = copy.deepcopy(self.inputs)
         data["NameMap"]["Arguments"] = copy.deepcopy(self.inputs)
         data["Return"] = {}
-        data["Code"] = []
+        data["CodeMethod"] = []
         
         for node in self.nodes:
             if isinstance(node, TerminalNode):
@@ -263,11 +264,11 @@ class Method:
                     
                 if node.priority+1 > linked.priority :
                     if linked.processed:
-                        self.updatePriority(data["Code"], linked, node.priority+1)
+                        self.updatePriority(data["CodeMethod"], linked, node.priority+1)
                     else:
                         linked.priority = node.priority+1
         
-        data["Code"].sort(key=lambda tup: tup[0], reverse = True)
+        data["CodeMethod"].sort(key=lambda tup: tup[0], reverse = True)
         
         method = "\tdef "+self.name+"(self"
         for input in self.inputs:
@@ -275,7 +276,7 @@ class Method:
             method += input
         method+="):"
         
-        for line in data["Code"] :
+        for line in data["CodeMethod"] :
             method += "\n\t\t"+line[1]
         
         if len(data["Return"]) > 0:
@@ -330,7 +331,7 @@ class Node:
         pass
     
     def writeCode(self, data, code):
-        data["Code"].append((self.priority, code, self))
+        data["CodeMethod"].append((self.priority, code, self))
         self.processed = True
     
     def getImports(self):
@@ -636,16 +637,17 @@ class DataSettingsNode(Node):
         
         self.orientation = "Row"
         self.iteration = "Single"
+        self.index = 0
         
     def process(self, data):
-        code = self.getMappedName(self, self.outputs[0], data["NameMap"]) + " = Data(" + self.getMappedName(self.links["Data In"][0], self.links["Data In"][1], data["NameMap"]) + ".values, iteration='"+self.iteration+"', orientation='"+self.orientation+"')"
+        code = self.getMappedName(self, self.outputs[0], data["NameMap"]) + " = Data(" + self.getMappedName(self.links["Data In"][0], self.links["Data In"][1], data["NameMap"]) + ".values, iteration='"+self.iteration+"', orientation='"+self.orientation+"', index="+str(self.index)+")"
         self.writeCode(data, code)
 
 class CodeNode(MethodNode):
     pass
 
 def createPassThroughMethod(name, num):
-    method = Method(name)
+    method = NodeMethod(name)
     method.setNumInputs(num)
     method.setNumOutputs(num)
     
@@ -664,7 +666,7 @@ def createPassThroughMethod(name, num):
     return method
 
 def createTestInputsMethod(name):
-    method = Method(name)
+    method = NodeMethod(name)
     method.setNumInputs(1)
     method.setNumOutputs(3)
     
@@ -693,7 +695,7 @@ def createTestInputsMethod(name):
     return method
 
 def createTestOutputsMethod(name):
-    method = Method(name)
+    method = NodeMethod(name)
     method.setNumInputs(3)
     method.setNumOutputs(1)
     
