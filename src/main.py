@@ -884,6 +884,155 @@ class GUIDataSettingsNode(GUIMethodNode):
     def verify(self):
         pass
 
+class MethodEditWindow(Toplevel):
+    def __init__(self, guiparent, parent, method):
+        Toplevel.__init__(self, guiparent, background="white")   
+         
+        self.parent = parent
+        self.method = method
+        self.inputs = method.inputs
+        self.outputs = method.outputs
+        self.name = method.name
+        
+        self.frame = Frame(self)
+        self.create()
+                
+    def create(self):
+        
+        self.frame.destroy()
+        self.frame = Frame(self)
+        
+        Grid.columnconfigure(self.frame, 0, weight=2)
+        Grid.columnconfigure(self.frame, 1, weight=1)
+        Grid.columnconfigure(self.frame, 2, weight=2)
+        Grid.columnconfigure(self.frame, 3, weight=1)
+        
+        Label(self.frame, text="NodeMethod Name:").grid(row=0, column=0, columnspan=4, sticky=N+S+E+W)
+        self.methodname = Entry(self.frame)
+        self.methodname.grid(row=1, column=0, columnspan=4, sticky=N+S+E+W)
+        self.methodname.insert(0, self.name)
+        Label(self.frame, text="Inputs:").grid(row=2, column=0, columnspan=2, sticky=N+S+E+W)
+        Label(self.frame, text="Outputs:").grid(row=2, column=2, columnspan=2, sticky=N+S+E+W)
+        
+        self.methodinputs = []
+        i=3
+        for input in self.inputs:
+            mi = Entry(self.frame)
+            mi.grid(row=i, column=0, columnspan=1, sticky=N+S+E+W)
+            self.methodinputs.append(mi)
+            mi.insert(0, input)
+            
+            b = Button(self.frame, text="Remove", command=lambda input=input: self.removeInput(input))
+            b.grid(row=i, column=1, columnspan=1, sticky=N+S+E+W)
+            
+            i+=1
+            
+        b = Button(self.frame, text="Add", command=lambda: self.addInput())
+        b.grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        max = i+1
+        
+        self.methodoutputs = []
+        i=3
+        for output in self.outputs:
+            mi = Entry(self.frame)
+            mi.grid(row=i, column=2, columnspan=1, sticky=N+S+E+W)
+            self.methodoutputs.append(mi)
+            mi.insert(0, output)
+            
+            b = Button(self.frame, text="Remove", command=lambda output=output: self.removeOutput(output))
+            b.grid(row=i, column=3, columnspan=1, sticky=N+S+E+W)
+            
+            i+=1
+        
+        b = Button(self.frame, text="Add", command=lambda: self.addOutput())
+        b.grid(row=i, column=2, columnspan=2, sticky=N+S+E+W)
+        
+        if i+1 > max:
+            max = i+1
+        
+        b = Button(self.frame, text="Apply", command=self.apply)
+        b.grid(row=max, column=0, columnspan=2, sticky=N+S+E+W)
+        
+        b = Button(self.frame, text="Cancel", command=self.cancel)
+        b.grid(row=max, column=2, columnspan=2, sticky=N+S+E+W)
+        
+        self.frame.pack(fill=BOTH, expand=1)
+    
+    def addInput(self):
+        self.read()
+        name = "Input0"
+        while name in self.inputs:
+            name = name+"0"
+        self.inputs.append(name)
+        self.create()
+        
+    def addOutput(self):
+        self.read()
+        name = "Output0"
+        while name in self.outputs:
+            name = name+"0"
+        self.outputs.append(name)
+        self.create()
+    
+    def removeInput(self, input):
+        self.read()
+        self.inputs.remove(input)
+        self.create()
+        
+    def removeOutput(self, output):
+        self.read()
+        self.outputs.remove(output)
+        self.create()
+    
+    def gen_valid_identifier(self, seq):
+        # get an iterator
+        itr = iter(seq)
+        # pull characters until we get a legal one for first in identifer
+        for ch in itr:
+            if ch == '_' or ch.isalpha():
+                yield ch
+                break
+        # pull remaining characters and yield legal ones for identifier
+        for ch in itr:
+            if ch == '_' or ch.isalpha() or ch.isdigit():
+                yield ch
+    
+    def sanitize_identifier(self, name):
+        return ''.join(self.gen_valid_identifier(name))
+
+    def read(self):
+        self.inputs = []
+        for mi in self.methodinputs:
+            self.inputs.append(mi.get())
+        self.outputs = []
+        for mo in self.methodoutputs:
+            self.outputs.append(mo.get())
+        self.name = self.methodname.get()
+        self.name = self.sanitize_identifier(self.name)
+            
+    def apply(self):
+        self.read()
+        
+        if not self.parent.program.checkNameUsed(self.name):
+            oldname = self.method.name
+            self.parent.parent.tabbedpane.changeTabName(oldname, self.name)
+            self.parent.parent.renameMethod(self.method, self.name)
+            self.method.name = self.name
+        
+        self.method.inputs = self.inputs
+        self.method.outputs = self.outputs
+        self.parent.verify()
+        
+        global app
+        self.method.editted = True
+        app.tabbedpane.create()
+        
+        self.destroy()
+        
+    def cancel(self):
+        self.destroy()
+
 class GUIMethod:
     def __init__(self, parent, method, program):
         self.parent = parent
@@ -1489,9 +1638,9 @@ def addValueNode(method):
 def createEmptyMethod(program, code=False, empty=False):
     method = None
     if code:
-        method = CodeMethod(program.getUnusedName("Code_Node"))
+        method = CodeMethod(program.getUnusedName("CodeMethod"))
     else:
-        method = NodeMethod(program.getUnusedName())
+        method = NodeMethod(program.getUnusedName("NodeMethod"))
         
         if empty:
             method.setNumInputs(0)
@@ -1511,201 +1660,6 @@ def createEmptyMethod(program, code=False, empty=False):
     program.addMethod(method)
         
     return method
-
-class MethodEditWindow(Toplevel):
-    def __init__(self, guiparent, parent, method):
-        Toplevel.__init__(self, guiparent, background="white")   
-         
-        self.parent = parent
-        self.method = method
-        self.inputs = method.inputs
-        self.outputs = method.outputs
-        self.name = method.name
-        
-        self.frame = Frame(self)
-        self.create()
-                
-    def create(self):
-        
-        self.frame.destroy()
-        self.frame = Frame(self)
-        
-        Grid.columnconfigure(self.frame, 0, weight=2)
-        Grid.columnconfigure(self.frame, 1, weight=1)
-        Grid.columnconfigure(self.frame, 2, weight=2)
-        Grid.columnconfigure(self.frame, 3, weight=1)
-        
-        Label(self.frame, text="NodeMethod Name:").grid(row=0, column=0, columnspan=4, sticky=N+S+E+W)
-        self.methodname = Entry(self.frame)
-        self.methodname.grid(row=1, column=0, columnspan=4, sticky=N+S+E+W)
-        self.methodname.insert(0, self.name)
-        Label(self.frame, text="Inputs:").grid(row=2, column=0, columnspan=2, sticky=N+S+E+W)
-        Label(self.frame, text="Outputs:").grid(row=2, column=2, columnspan=2, sticky=N+S+E+W)
-        
-        self.methodinputs = []
-        i=3
-        for input in self.inputs:
-            mi = Entry(self.frame)
-            mi.grid(row=i, column=0, columnspan=1, sticky=N+S+E+W)
-            self.methodinputs.append(mi)
-            mi.insert(0, input)
-            
-            b = Button(self.frame, text="Remove", command=lambda input=input: self.removeInput(input))
-            b.grid(row=i, column=1, columnspan=1, sticky=N+S+E+W)
-            
-            i+=1
-            
-        b = Button(self.frame, text="Add", command=lambda: self.addInput())
-        b.grid(row=i, column=0, columnspan=2, sticky=N+S+E+W)
-        
-        max = i+1
-        
-        self.methodoutputs = []
-        i=3
-        for output in self.outputs:
-            mi = Entry(self.frame)
-            mi.grid(row=i, column=2, columnspan=1, sticky=N+S+E+W)
-            self.methodoutputs.append(mi)
-            mi.insert(0, output)
-            
-            b = Button(self.frame, text="Remove", command=lambda output=output: self.removeOutput(output))
-            b.grid(row=i, column=3, columnspan=1, sticky=N+S+E+W)
-            
-            i+=1
-        
-        b = Button(self.frame, text="Add", command=lambda: self.addOutput())
-        b.grid(row=i, column=2, columnspan=2, sticky=N+S+E+W)
-        
-        if i+1 > max:
-            max = i+1
-        
-        b = Button(self.frame, text="Apply", command=self.apply)
-        b.grid(row=max, column=0, columnspan=2, sticky=N+S+E+W)
-        
-        b = Button(self.frame, text="Cancel", command=self.cancel)
-        b.grid(row=max, column=2, columnspan=2, sticky=N+S+E+W)
-        
-        self.frame.pack(fill=BOTH, expand=1)
-    
-    def addInput(self):
-        self.read()
-        name = "Input0"
-        while name in self.inputs:
-            name = name+"0"
-        self.inputs.append(name)
-        self.create()
-        
-    def addOutput(self):
-        self.read()
-        name = "Output0"
-        while name in self.outputs:
-            name = name+"0"
-        self.outputs.append(name)
-        self.create()
-    
-    def removeInput(self, input):
-        self.read()
-        self.inputs.remove(input)
-        self.create()
-        
-    def removeOutput(self, output):
-        self.read()
-        self.outputs.remove(output)
-        self.create()
-    
-    def gen_valid_identifier(self, seq):
-        # get an iterator
-        itr = iter(seq)
-        # pull characters until we get a legal one for first in identifer
-        for ch in itr:
-            if ch == '_' or ch.isalpha():
-                yield ch
-                break
-        # pull remaining characters and yield legal ones for identifier
-        for ch in itr:
-            if ch == '_' or ch.isalpha() or ch.isdigit():
-                yield ch
-    
-    def sanitize_identifier(self, name):
-        return ''.join(self.gen_valid_identifier(name))
-
-    def read(self):
-        self.inputs = []
-        for mi in self.methodinputs:
-            self.inputs.append(mi.get())
-        self.outputs = []
-        for mo in self.methodoutputs:
-            self.outputs.append(mo.get())
-        self.name = self.methodname.get()
-        self.name = self.sanitize_identifier(self.name)
-            
-    def apply(self):
-        self.read()
-        
-        if not self.parent.program.checkNameUsed(self.name):
-            oldname = self.method.name
-            self.parent.parent.tabbedpane.changeTabName(oldname, self.name)
-            self.parent.parent.renameMethod(self.method, self.name)
-            self.method.name = self.name
-        
-        self.method.inputs = self.inputs
-        self.method.outputs = self.outputs
-        self.parent.verify()
-        
-        global app
-        self.method.editted = True
-        app.tabbedpane.create()
-        
-        self.destroy()
-        
-    def cancel(self):
-        self.destroy()
-
-class ToolTip(object):
-
-    def __init__(self, widget):
-        self.widget = widget
-        self.tipwindow = None
-        self.id = None
-        self.x = self.y = 0
-
-    def showtip(self, text):
-        "Display text in tooltip window"
-        self.text = text
-        if self.tipwindow or not self.text:
-            return
-        x, y, cx, cy = self.widget.bbox("insert")
-        x = x + cx + self.widget.winfo_rootx() + 27
-        y = y + cy + self.widget.winfo_rooty() + 27
-        self.tipwindow = tw = Toplevel(self.widget)
-        tw.wm_overrideredirect(1)
-        tw.wm_geometry("+%d+%d" % (x, y))
-        try:
-            # For Mac OS
-            tw.tk.call("::tk::unsupported::MacWindowStyle",
-                       "style", tw._w,
-                       "help", "noActivates")
-        except TclError:
-            pass
-        label = Label(tw, text=self.text, justify=LEFT,
-                      background="#ffffe0", relief=SOLID, borderwidth=1,
-                      font=("tahoma", "8", "normal"))
-        label.pack(ipadx=1)
-
-    def hidetip(self):
-        tw = self.tipwindow
-        self.tipwindow = None
-        if tw:
-            tw.destroy()
-
-def createToolTip(widget, text):
-    toolTip = ToolTip(widget)
-    def enter(event):
-        toolTip.showtip(text)
-    def leave(event):
-        toolTip.hidetip()
-    widget.bind('<Enter>', enter)
-    widget.bind('<Leave>', leave)
 
 class TabbedPane(Frame):
     def __init__(self, parent):
@@ -1963,7 +1917,7 @@ class MainWindow(Frame):
         
         runmenu = Menu(menubar, tearoff=0)
         runmenu.add_command(label="Compile", command=self.compile)
-        runmenu.add_command(label="Run", command=self.run)
+        runmenu.add_command(label="Compile and Run", command=self.run)
         runmenu.add_separator()
         runmenu.add_command(label="Show Compiled Code", command=self.showCode)
         menubar.add_cascade(label="Run", menu=runmenu)
@@ -1972,22 +1926,39 @@ class MainWindow(Frame):
         parent.config(menu=menubar)
         
     def compile(self):
-        method = self.tabbedpane.getActive().method
-        program = self.openMethods[method][1]
-        code = program.compile(method)
+        self.output.destroy()
+        self.output = Frame(self.console, background="white")
+        self.output.pack()
+        
+        try:
+            method = self.tabbedpane.getActive().method
+            program = self.openMethods[method][1]
+            code = program.compile(method)
+            Label(self.output, text="Compile Successful", background="white").pack()
+        except:
+            Label(self.output, text="Failed To Compile", background="pink").pack()
+            return False
+        
         file = open(program.name+'.py', 'w')
         file.write(code)
         file.close()
+        return True
         
     def run(self):
-        self.compile()
+        succeed = self.compile()
+        if not succeed:
+            return
         self.output.destroy()
         self.output = Frame(self.console, background="white")
         self.output.pack()
         method = self.tabbedpane.getActive().method
         program = self.openMethods[method][1]
-        out = subprocess.check_output(["python", program.name+".py"])
-        Label(self.output, text=out, background="white").pack()
+        
+        try:
+            out = subprocess.check_output(["python", program.name+".py"])
+            Label(self.output, text=out, background="white").pack()
+        except subprocess.CalledProcessError as e:
+            Label(self.output, text=out, background="pink").pack()
     
     def showCode(self):
         program = self.programs[0][0]
